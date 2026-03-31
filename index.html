@@ -330,8 +330,6 @@ try {
   var stored = localStorage.getItem('fach_folio_counter');
   if (stored === null) { folioCounter = 0; localStorage.setItem('fach_folio_counter','0'); }
   else { folioCounter = parseInt(stored)||0; }
-  // Reset a 0 por instrucción
-  folioCounter = 0; localStorage.setItem('fach_folio_counter','0');
 } catch(e) {}
 
 function saveLS() { try { localStorage.setItem('fach_historial', JSON.stringify(solicitudes)); } catch(e) {} }
@@ -349,7 +347,7 @@ function resetContador() {
 
 // ── INICIO ──
 function init() {
-  var current = nextFolioNum();
+  var current = String(folioCounter + 1).padStart(4,'0');
   document.getElementById('folio-num').value = current;
   document.getElementById('folio-anio').value = new Date().getFullYear();
   document.getElementById('fecha').value = new Date().toISOString().slice(0,10);
@@ -419,10 +417,13 @@ function renderItems() {
   document.getElementById('tot-total').textContent = fmtN(t.total);
 }
 
+var sigDataURL = '';
+
 // ── PASOS ──
 function irPaso(n) {
   if (n < 1 || n > 3) return;
-  if (n === 3) { actualizarResumen(); setTimeout(initCanvas, 100); }
+  if (n === 3) { actualizarResumen(); setTimeout(function(){ initCanvas(); if(sigDataURL) restaurarFirma(); }, 150); }
+  if (pasoActual === 3 && n !== 3) { sigDataURL = capturarFirma(); }
   document.querySelectorAll('.step-panel').forEach(function(p){ p.classList.remove('activo'); });
   document.querySelectorAll('.step-item').forEach(function(s,i){
     s.classList.remove('activo','completo');
@@ -433,16 +434,26 @@ function irPaso(n) {
   pasoActual = n;
   document.getElementById('btn-atras').disabled = (n === 1);
   var btnSig = document.getElementById('btn-siguiente');
-  if (n === 3) { 
-    btnSig.textContent = '+ Nuevo'; 
-    btnSig.className = 'btn-nav btn-siguiente dorado'; 
-    btnSig.onclick = function(){ nuevoFormulario(); }; 
+  if (n === 3) {
+    btnSig.textContent = '+ Nuevo';
+    btnSig.className = 'btn-nav btn-siguiente dorado';
+    btnSig.onclick = function(){ nuevoFormulario(); };
+  } else {
+    btnSig.textContent = 'Siguiente →';
+    btnSig.className = 'btn-nav btn-siguiente';
+    btnSig.onclick = function(){ irPaso(pasoActual+1); };
   }
-  else { btnSig.textContent = 'Siguiente →'; btnSig.className = 'btn-nav btn-siguiente'; btnSig.onclick = function(){ irPaso(pasoActual+1); }; }
-  // Actualizar folio en header
   var anio = document.getElementById('folio-anio').value;
   var num = document.getElementById('folio-num').value;
   document.getElementById('folio-show').textContent = 'ADQ-' + anio + '-' + num;
+}
+
+function restaurarFirma() {
+  var sc = document.getElementById('sig-canvas');
+  if (!sc || !sigDataURL) return;
+  var img = new Image();
+  img.onload = function(){ sc.getContext('2d').drawImage(img, 0, 0); };
+  img.src = sigDataURL;
 }
 
 function verHistorial() {
@@ -556,6 +567,7 @@ function guardarHistorial() {
 
   // Ir a nuevo formulario después del toast
   setTimeout(function(){
+    sigDataURL = '';
     var newNum = nextFolioNum();
     document.getElementById('folio-num').value = newNum;
     document.getElementById('folio-anio').value = new Date().getFullYear();
@@ -599,7 +611,8 @@ function eliminarHistorial(i) {
 
 function nuevoFormulario() {
   editIndex = -1;
-  var fn = nextFolioNum();
+  sigDataURL = '';
+  var fn = String(folioCounter + 1).padStart(4,'0');
   document.getElementById('folio-num').value = fn;
   document.getElementById('folio-anio').value = new Date().getFullYear();
   document.getElementById('fecha').value = new Date().toISOString().slice(0,10);
