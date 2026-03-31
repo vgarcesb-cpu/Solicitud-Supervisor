@@ -340,14 +340,14 @@ function fmtFecha(f) { if(!f) return ''; var p=f.split('-'); return p.length===3
 function resetContador() {
   if (!confirm('¿Resetear el contador de folios a 0001?')) return;
   folioCounter = 0; saveFolioCounter();
-  document.getElementById('folio-num').value = String(folioCounter+1).padStart(4,'0');
+  var newNum = nextFolioNum();
+  document.getElementById('folio-num').value = newNum;
   mostrarToast('✓ Contador reseteado a 0001');
 }
 
 // ── INICIO ──
 function init() {
-  // Solo asignar folio actual sin incrementar — incrementa solo en nuevoFormulario
-  var current = String(folioCounter + 1).padStart(4,'0');
+  var current = nextFolioNum();
   document.getElementById('folio-num').value = current;
   document.getElementById('folio-anio').value = new Date().getFullYear();
   document.getElementById('fecha').value = new Date().toISOString().slice(0,10);
@@ -554,9 +554,7 @@ function guardarHistorial() {
 
   // Ir a nuevo formulario después del toast
   setTimeout(function(){
-    folioCounter++;
-    saveFolioCounter();
-    var newNum = String(folioCounter).padStart(4,'0');
+    var newNum = nextFolioNum();
     document.getElementById('folio-num').value = newNum;
     document.getElementById('folio-anio').value = new Date().getFullYear();
     document.getElementById('fecha').value = new Date().toISOString().slice(0,10);
