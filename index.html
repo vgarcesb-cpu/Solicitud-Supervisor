@@ -518,31 +518,58 @@ function renderHistorial() {
 }
 
 function guardarHistorial() {
+  // Leer todos los valores primero antes de cualquier cambio
   var t = calcTotals();
-  var anio = document.getElementById('folio-anio').value;
-  var num = document.getElementById('folio-num').value;
+  var anio = document.getElementById('folio-anio').value || new Date().getFullYear().toString();
+  var num = document.getElementById('folio-num').value || '0001';
+  var fecha = document.getElementById('fecha').value || new Date().toISOString().slice(0,10);
+  var esc = document.getElementById('escuadrilla').value || '';
+  var cdte = document.getElementById('cdte').value || '';
+  var obs = document.getElementById('observaciones').value || '';
+  var fn = document.getElementById('firma-nombre') ? document.getElementById('firma-nombre').value : '';
+  var fg = document.getElementById('firma-grado') ? document.getElementById('firma-grado').value : '';
+  var fc = document.getElementById('firma-cargo') ? document.getElementById('firma-cargo').value : '';
+  var itsSnap = items.map(function(it){ return Object.assign({},it); });
+
   var rec = {
-    folioAnio: anio, folioNum: num,
-    fecha: document.getElementById('fecha').value,
-    escuadrilla: document.getElementById('escuadrilla').value,
-    cdte: document.getElementById('cdte').value,
-    observaciones: document.getElementById('observaciones').value,
-    firmaNombre: document.getElementById('firma-nombre').value,
-    firmaGrado: document.getElementById('firma-grado').value,
-    firmaCargo: document.getElementById('firma-cargo').value,
-    items: items.map(function(it){ return Object.assign({},it); }),
-    total: t.total
+    folioAnio: anio, folioNum: num, fecha: fecha,
+    escuadrilla: esc, cdte: cdte, observaciones: obs,
+    firmaNombre: fn, firmaGrado: fg, firmaCargo: fc,
+    items: itsSnap, total: t.total
   };
+
   if (editIndex >= 0) {
     history[editIndex] = rec;
-    mostrarToast('✓ Solicitud actualizada');
   } else {
     history.push(rec);
-    mostrarToast('✓ Guardado en historial');
   }
-  saveLS();
+
+  // Guardar en localStorage
+  try {
+    localStorage.setItem('fach_historial', JSON.stringify(history));
+  } catch(e) {}
+
   editIndex = -1;
-  setTimeout(function(){ nuevoFormulario(); }, 800);
+  mostrarToast('✓ Guardado: ADQ-' + anio + '-' + num);
+
+  // Ir a nuevo formulario después del toast
+  setTimeout(function(){
+    folioCounter++;
+    saveFolioCounter();
+    var newNum = String(folioCounter).padStart(4,'0');
+    document.getElementById('folio-num').value = newNum;
+    document.getElementById('folio-anio').value = new Date().getFullYear();
+    document.getElementById('fecha').value = new Date().toISOString().slice(0,10);
+    document.getElementById('escuadrilla').value = 'Bandada Instalaciones';
+    document.getElementById('cdte').value = '';
+    document.getElementById('observaciones').value = '';
+    document.getElementById('firma-nombre').value = '';
+    document.getElementById('firma-grado').value = '';
+    document.getElementById('firma-cargo').value = '';
+    items = [];
+    agregarItem();
+    irPaso(1);
+  }, 1000);
 }
 
 function cargarHistorial(i) {
