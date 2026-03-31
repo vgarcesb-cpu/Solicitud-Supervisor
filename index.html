@@ -431,7 +431,11 @@ function irPaso(n) {
   pasoActual = n;
   document.getElementById('btn-atras').disabled = (n === 1);
   var btnSig = document.getElementById('btn-siguiente');
-  if (n === 3) { btnSig.textContent = '✓ Listo'; btnSig.className = 'btn-nav btn-siguiente dorado'; btnSig.onclick = function(){}; }
+  if (n === 3) { 
+    btnSig.textContent = '+ Nuevo'; 
+    btnSig.className = 'btn-nav btn-siguiente dorado'; 
+    btnSig.onclick = function(){ nuevoFormulario(); }; 
+  }
   else { btnSig.textContent = 'Siguiente →'; btnSig.className = 'btn-nav btn-siguiente'; btnSig.onclick = function(){ irPaso(pasoActual+1); }; }
   // Actualizar folio en header
   var anio = document.getElementById('folio-anio').value;
@@ -534,11 +538,11 @@ function guardarHistorial() {
     mostrarToast('✓ Solicitud actualizada');
   } else {
     history.push(rec);
-    mostrarToast('✓ Solicitud guardada en historial');
+    mostrarToast('✓ Guardado en historial');
   }
   saveLS();
   editIndex = -1;
-  nuevoFormulario();
+  setTimeout(function(){ nuevoFormulario(); }, 800);
 }
 
 function cargarHistorial(i) {
