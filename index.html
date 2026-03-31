@@ -321,8 +321,8 @@ body { font-family: "Segoe UI", Arial, sans-serif; font-size: 14px; background: 
 var pasoActual = 1;
 var items = [];
 var editIndex = -1;
-var history = [];
-try { var s = localStorage.getItem('fach_historial'); if(s) history = JSON.parse(s); } catch(e) {}
+var solicitudes = [];
+try { var s = localStorage.getItem('fach_historial'); if(s) solicitudes = JSON.parse(s); } catch(e) {}
 var folioCounter = 0;
 try {
   var stored = localStorage.getItem('fach_folio_counter');
@@ -332,7 +332,7 @@ try {
   folioCounter = 0; localStorage.setItem('fach_folio_counter','0');
 } catch(e) {}
 
-function saveLS() { try { localStorage.setItem('fach_historial', JSON.stringify(history)); } catch(e) {} }
+function saveLS() { try { localStorage.setItem('fach_historial', JSON.stringify(solicitudes)); } catch(e) {} }
 function saveFolioCounter() { try { localStorage.setItem('fach_folio_counter', String(folioCounter)); } catch(e) {} }
 function nextFolioNum() { folioCounter++; saveFolioCounter(); return String(folioCounter).padStart(4,'0'); }
 function fmtN(n) { return n > 0 ? Math.round(n).toLocaleString('es-CL') : '—'; }
@@ -499,12 +499,12 @@ function actualizarResumen() {
 // ── HISTORIAL ──
 function renderHistorial() {
   var lista = document.getElementById('hist-lista');
-  if (history.length === 0) {
+  if (solicitudes.length === 0) {
     lista.innerHTML = '<div style="text-align:center;color:#aaa;padding:20px;font-size:13px">No hay solicitudes guardadas aún.</div>';
     return;
   }
-  lista.innerHTML = history.slice().reverse().map(function(h, ri) {
-    var i = history.length - 1 - ri;
+  lista.innerHTML = solicitudes.slice().reverse().map(function(h, ri) {
+    var i = solicitudes.length - 1 - ri;
     return '<div class="hist-item-app" onclick="cargarHistorial('+i+')">' +
       '<div style="display:flex;justify-content:space-between;align-items:center">' +
         '<span class="hist-folio">ADQ-'+h.folioAnio+'-'+h.folioNum+'</span>' +
@@ -539,14 +539,14 @@ function guardarHistorial() {
   };
 
   if (editIndex >= 0) {
-    history[editIndex] = rec;
+    solicitudes[editIndex] = rec;
   } else {
-    history.push(rec);
+    solicitudes.push(rec);
   }
 
   // Guardar en localStorage
   try {
-    localStorage.setItem('fach_historial', JSON.stringify(history));
+    localStorage.setItem('fach_historial', JSON.stringify(solicitudes));
   } catch(e) {}
 
   editIndex = -1;
@@ -573,7 +573,7 @@ function guardarHistorial() {
 }
 
 function cargarHistorial(i) {
-  var h = history[i];
+  var h = solicitudes[i];
   editIndex = i;
   document.getElementById('folio-anio').value = h.folioAnio;
   document.getElementById('folio-num').value = h.folioNum;
@@ -592,7 +592,7 @@ function cargarHistorial(i) {
 }
 
 function eliminarHistorial(i) {
-  history.splice(i, 1);
+  solicitudes.splice(i, 1);
   saveLS();
   renderHistorial();
 }
