@@ -335,7 +335,13 @@ try {
 function saveLS() { try { localStorage.setItem('fach_historial', JSON.stringify(solicitudes)); } catch(e) {} }
 function saveFolioCounter() { try { localStorage.setItem('fach_folio_counter', String(folioCounter)); } catch(e) {} }
 function saveCurrentFolio(n) { try { localStorage.setItem('fach_folio_current', n); } catch(e) {} }
-function nextFolioNum() { folioCounter++; saveFolioCounter(); var n = String(folioCounter).padStart(4,'0'); saveCurrentFolio(n); return n; }
+function nextFolioNum() { 
+  folioCounter++; 
+  saveFolioCounter(); 
+  var next = String(folioCounter + 1).padStart(4,'0'); 
+  saveCurrentFolio(next); 
+  return next; 
+}
 function fmtN(n) { return n > 0 ? Math.round(n).toLocaleString('es-CL') : '—'; }
 function fmtFecha(f) { if(!f) return ''; var p=f.split('-'); return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:f; }
 function resetContador() {
