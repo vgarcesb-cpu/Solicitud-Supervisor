@@ -325,40 +325,27 @@ var items = [];
 var editIndex = -1;
 var solicitudes = [];
 try { var s = localStorage.getItem('fach_historial'); if(s) solicitudes = JSON.parse(s); } catch(e) {}
-var folioCounter = 0;
-try {
-  var stored = localStorage.getItem('fach_folio_counter');
-  if (stored === null) { folioCounter = 0; localStorage.setItem('fach_folio_counter','0'); }
-  else { folioCounter = parseInt(stored)||0; }
-} catch(e) {}
 
 function saveLS() { try { localStorage.setItem('fach_historial', JSON.stringify(solicitudes)); } catch(e) {} }
-function saveFolioCounter() { try { localStorage.setItem('fach_folio_counter', String(folioCounter)); } catch(e) {} }
-function saveCurrentFolio(n) { try { localStorage.setItem('fach_folio_current', n); } catch(e) {} }
-function nextFolioNum() { 
-  folioCounter++; 
-  saveFolioCounter(); 
-  var next = String(folioCounter + 1).padStart(4,'0'); 
-  saveCurrentFolio(next); 
-  return next; 
-}
+function getFolio() { try { return parseInt(localStorage.getItem('fach_folio')||'0'); } catch(e) { return 0; } }
+function setFolio(n) { try { localStorage.setItem('fach_folio', String(n)); } catch(e) {} }
+function folioStr(n) { return String(n).padStart(4,'0'); }
 function fmtN(n) { return n > 0 ? Math.round(n).toLocaleString('es-CL') : '—'; }
 function fmtFecha(f) { if(!f) return ''; var p=f.split('-'); return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:f; }
 function resetContador() {
   if (!confirm('¿Resetear el contador de folios a 0001?')) return;
-  folioCounter = 0; saveFolioCounter(); saveCurrentFolio('0001');
+  setFolio(0);
   document.getElementById('folio-num').value = '0001';
   mostrarToast('✓ Contador reseteado a 0001');
 }
 
 // ── INICIO ──
 function init() {
-  var current;
-  try { current = localStorage.getItem('fach_folio_current') || String(folioCounter + 1).padStart(4,'0'); } catch(e) { current = String(folioCounter + 1).padStart(4,'0'); }
-  document.getElementById('folio-num').value = current;
+  var actual = getFolio() + 1;
+  document.getElementById('folio-num').value = folioStr(actual);
   document.getElementById('folio-anio').value = new Date().getFullYear();
   document.getElementById('fecha').value = new Date().toISOString().slice(0,10);
-  document.getElementById('folio-show').textContent = 'ADQ-' + new Date().getFullYear() + '-' + current;
+  document.getElementById('folio-show').textContent = 'ADQ-' + new Date().getFullYear() + '-' + folioStr(actual);
   agregarItem();
 }
 
@@ -572,11 +559,13 @@ function guardarHistorial() {
   editIndex = -1;
   mostrarToast('✓ Guardado: ADQ-' + anio + '-' + num);
 
-  // Ir a nuevo formulario después del toast
   setTimeout(function(){
     sigDataURL = '';
-    var newNum = nextFolioNum();
-    document.getElementById('folio-num').value = newNum;
+    // INCREMENTAR CONTADOR — guardar el folio usado y mostrar el siguiente
+    var usado = parseInt(num) || getFolio() + 1;
+    setFolio(usado);
+    var siguiente = folioStr(usado + 1);
+    document.getElementById('folio-num').value = siguiente;
     document.getElementById('folio-anio').value = new Date().getFullYear();
     document.getElementById('fecha').value = new Date().toISOString().slice(0,10);
     document.getElementById('escuadrilla').value = 'Bandada Instalaciones';
@@ -619,8 +608,7 @@ function eliminarHistorial(i) {
 function nuevoFormulario() {
   editIndex = -1;
   sigDataURL = '';
-  var fn = String(folioCounter + 1).padStart(4,'0');
-  saveCurrentFolio(fn);
+  var fn = folioStr(getFolio() + 1);
   document.getElementById('folio-num').value = fn;
   document.getElementById('folio-anio').value = new Date().getFullYear();
   document.getElementById('fecha').value = new Date().toISOString().slice(0,10);
