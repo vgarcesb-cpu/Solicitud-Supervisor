@@ -334,20 +334,21 @@ try {
 
 function saveLS() { try { localStorage.setItem('fach_historial', JSON.stringify(solicitudes)); } catch(e) {} }
 function saveFolioCounter() { try { localStorage.setItem('fach_folio_counter', String(folioCounter)); } catch(e) {} }
-function nextFolioNum() { folioCounter++; saveFolioCounter(); return String(folioCounter).padStart(4,'0'); }
+function saveCurrentFolio(n) { try { localStorage.setItem('fach_folio_current', n); } catch(e) {} }
+function nextFolioNum() { folioCounter++; saveFolioCounter(); var n = String(folioCounter).padStart(4,'0'); saveCurrentFolio(n); return n; }
 function fmtN(n) { return n > 0 ? Math.round(n).toLocaleString('es-CL') : '—'; }
 function fmtFecha(f) { if(!f) return ''; var p=f.split('-'); return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:f; }
 function resetContador() {
   if (!confirm('¿Resetear el contador de folios a 0001?')) return;
-  folioCounter = 0; saveFolioCounter();
-  var newNum = nextFolioNum();
-  document.getElementById('folio-num').value = newNum;
+  folioCounter = 0; saveFolioCounter(); saveCurrentFolio('0001');
+  document.getElementById('folio-num').value = '0001';
   mostrarToast('✓ Contador reseteado a 0001');
 }
 
 // ── INICIO ──
 function init() {
-  var current = String(folioCounter + 1).padStart(4,'0');
+  var current;
+  try { current = localStorage.getItem('fach_folio_current') || String(folioCounter + 1).padStart(4,'0'); } catch(e) { current = String(folioCounter + 1).padStart(4,'0'); }
   document.getElementById('folio-num').value = current;
   document.getElementById('folio-anio').value = new Date().getFullYear();
   document.getElementById('fecha').value = new Date().toISOString().slice(0,10);
@@ -613,6 +614,7 @@ function nuevoFormulario() {
   editIndex = -1;
   sigDataURL = '';
   var fn = String(folioCounter + 1).padStart(4,'0');
+  saveCurrentFolio(fn);
   document.getElementById('folio-num').value = fn;
   document.getElementById('folio-anio').value = new Date().getFullYear();
   document.getElementById('fecha').value = new Date().toISOString().slice(0,10);
