@@ -116,6 +116,7 @@ body { font-family: "Segoe UI", Arial, sans-serif; font-size: 14px; background: 
 
 /* NAV BAR */
 .nav-bar { background: linear-gradient(90deg, #071429, #0d2550); border-top: 1px solid rgba(200,168,75,0.3); padding: 10px 16px; display: flex; gap: 10px; flex-shrink: 0; }
+.nav-bar.oculta { display: none; }
 .btn-nav { flex: 1; padding: 13px; border-radius: 10px; border: none; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; }
 .btn-atras { background: rgba(255,255,255,0.08); color: #a0b8d8; border: 1.5px solid rgba(255,255,255,0.12); }
 .btn-siguiente { background: linear-gradient(135deg, var(--azul2), #0d2550); color: #fff; border: 1.5px solid rgba(200,168,75,0.4); }
@@ -733,7 +734,6 @@ function mostrarToast(msg) {
 }
 
 // ── CANVAS FIRMA ──
-var sigURL = '';
 function initCanvas() {
   var sc = document.getElementById('sig-canvas');
   if (!sc) return;
