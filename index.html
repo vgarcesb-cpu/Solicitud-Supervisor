@@ -112,6 +112,7 @@ body { font-family: "Segoe UI", Arial, sans-serif; font-size: 14px; background: 
 
 /* NAV BAR */
 .nav-bar { background: linear-gradient(90deg, #071429, #0d2550); border-top: 1px solid rgba(200,168,75,0.3); padding: 10px 16px; display: flex; gap: 10px; flex-shrink: 0; }
+.nav-bar.oculta { display: none; }
 .btn-nav { flex: 1; padding: 13px; border-radius: 10px; border: none; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; }
 .btn-atras { background: rgba(255,255,255,0.08); color: #a0b8d8; border: 1.5px solid rgba(255,255,255,0.12); }
 .btn-siguiente { background: linear-gradient(135deg, var(--azul2), #0d2550); color: #fff; border: 1.5px solid rgba(200,168,75,0.4); }
@@ -264,7 +265,7 @@ body { font-family: "Segoe UI", Arial, sans-serif; font-size: 14px; background: 
   <!-- NAV BAR -->
   <div class="nav-bar" id="nav-bar">
     <button class="btn-nav btn-atras" id="btn-atras" onclick="irPaso(pasoActual-1)" disabled>← Atrás</button>
-    <button class="btn-nav btn-nav btn-atras" onclick="verHistorial()" style="flex:0.6;font-size:12px">📁 Historial</button>
+    <button class="btn-nav btn-atras" onclick="verHistorial()" style="flex:0.6;font-size:12px">📁 Historial</button>
     <button class="btn-nav btn-atras" onclick="resetContador()" style="flex:0.5;font-size:11px;color:#c8a84b;border-color:rgba(200,168,75,0.3)">↺ Reset</button>
     <button class="btn-nav btn-siguiente" id="btn-siguiente" onclick="irPaso(pasoActual+1)">Siguiente →</button>
   </div>
@@ -325,6 +326,10 @@ var items = [];
 var editIndex = -1;
 var solicitudes = [];
 try { var s = localStorage.getItem('fach_historial'); if(s) solicitudes = JSON.parse(s); } catch(e) {}
+
+function escHTML(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 
 function saveLS() { try { localStorage.setItem('fach_historial', JSON.stringify(solicitudes)); } catch(e) {} }
 function getFolio() { try { return parseInt(localStorage.getItem('fach_folio')||'0'); } catch(e) { return 0; } }
@@ -393,7 +398,7 @@ function renderItems() {
         ['UN','KG','MT','LT','CJ','PAQ','GL'].map(function(u){ return '<option'+(it.unidad===u?' selected':'')+'>'+u+'</option>'; }).join('') +
         '</select></div>' +
         '<div><label class="campo-label" style="font-size:10px">Descripción</label>' +
-        '<input class="campo-input" style="padding:8px" type="text" placeholder="Descripción material/servicio" value="'+it.descripcion+'" onchange="updItem('+i+',\'descripcion\',this.value)"></div>' +
+        '<input class="campo-input" style="padding:8px" type="text" placeholder="Descripción material/servicio" value="'+escHTML(it.descripcion)+'" onchange="updItem('+i+',\'descripcion\',this.value)"></div>' +
       '</div>' +
       '<div class="item-precio">' +
         '<div><label class="campo-label" style="font-size:10px">P. Unitario</label>' +
@@ -538,10 +543,12 @@ function guardarHistorial() {
   var fc = document.getElementById('firma-cargo') ? document.getElementById('firma-cargo').value : '';
   var itsSnap = items.map(function(it){ return Object.assign({},it); });
 
+  var sigSnap = capturarFirma();
   var rec = {
     folioAnio: anio, folioNum: num, fecha: fecha,
     escuadrilla: esc, cdte: cdte, observaciones: obs,
     firmaNombre: fn, firmaGrado: fg, firmaCargo: fc,
+    firmaImg: sigSnap,
     items: itsSnap, total: t.total
   };
 
@@ -608,6 +615,8 @@ function eliminarHistorial(i) {
 function nuevoFormulario() {
   editIndex = -1;
   sigDataURL = '';
+  var sc = document.getElementById('sig-canvas');
+  if (sc) sc.getContext('2d').clearRect(0, 0, sc.width, sc.height);
   var fn = folioStr(getFolio() + 1);
   document.getElementById('folio-num').value = fn;
   document.getElementById('folio-anio').value = new Date().getFullYear();
@@ -671,13 +680,16 @@ function mostrarToast(msg) {
 }
 
 // ── CANVAS FIRMA ──
-var sigURL = '';
 function initCanvas() {
   var sc = document.getElementById('sig-canvas');
   if (!sc) return;
-  var ctx = sc.getContext('2d');
+  // Redimensionar (borra el contenido del canvas, restaurarFirma lo recupera)
   sc.width = sc.offsetWidth;
   sc.height = 200;
+  // Evitar añadir listeners duplicados en cada visita al paso 3
+  if (sc._siginit) return;
+  sc._siginit = true;
+  var ctx = sc.getContext('2d');
   ctx.strokeStyle = '#000';
   ctx.lineWidth = 2;
   ctx.lineCap = 'round';
@@ -700,7 +712,7 @@ function initCanvas() {
 function limpiarFirma() {
   var sc = document.getElementById('sig-canvas');
   if (sc) sc.getContext('2d').clearRect(0, 0, sc.width, sc.height);
-  sigURL = '';
+  sigDataURL = '';
 }
 
 function capturarFirma() {
