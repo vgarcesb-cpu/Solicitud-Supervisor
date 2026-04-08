@@ -559,8 +559,8 @@ function actualizarResumen() {
 
   var ri = document.getElementById('resumen-items');
   ri.innerHTML = '<div style="font-size:11px;font-weight:700;color:var(--azul2);margin:8px 0 4px">Ítems</div>' +
-    items.filter(function(it){ return it.descripcion; }).map(function(it,i){
-      return '<div class="resumen-item-row"><span>'+(i+1)+'. '+escHTML(it.cant)+' '+escHTML(it.unidad)+' — '+escHTML(it.descripcion)+'</span><span>$'+Math.round(calcSub(it)).toLocaleString('es-CL')+'</span></div>';
+    items.map(function(it,i){ return {it:it,i:i}; }).filter(function(o){ return o.it.descripcion; }).map(function(o){
+      return '<div class="resumen-item-row"><span>'+(o.i+1)+'. '+escHTML(o.it.cant)+' '+escHTML(o.it.unidad)+' — '+escHTML(o.it.descripcion)+'</span><span>$'+Math.round(calcSub(o.it)).toLocaleString('es-CL')+'</span></div>';
     }).join('');
 
   document.getElementById('r-sub').textContent = fmtN(t.sub);
