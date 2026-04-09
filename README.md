@@ -1,526 +1,904 @@
 # Solicitud Adquisición Supervisor
-### Fuerza Aérea de Chile · División de Educación · Academia de Guerra Aérea
+### PWA institucional — Academia de Guerra Aérea, FACH
+> **Versión:** 1.0.0 · **Autor:** Víctor Manuel Garcés Borje (Toti's®) · **Entidad:** AGA — Fuerza Aérea de Chile
 
 ---
 
 ## Índice
 
-1. [Descripción General](#descripción-general)
-2. [Arquitectura](#arquitectura)
-3. [Estructura del Archivo](#estructura-del-archivo)
-4. [Flujo de Usuario (Wizard 3 pasos)](#flujo-de-usuario-wizard-3-pasos)
-5. [Modelo de Datos](#modelo-de-datos)
-6. [Sistema de Folios](#sistema-de-folios)
-7. [Módulo de Ítems y Cálculo](#módulo-de-ítems-y-cálculo)
-8. [Módulo de Firma Digital](#módulo-de-firma-digital)
-9. [Módulo PDF / Impresión](#módulo-pdf--impresión)
-10. [Módulo Historial](#módulo-historial)
-11. [Persistencia (localStorage)](#persistencia-localstorage)
-12. [Referencia de Funciones](#referencia-de-funciones)
-13. [Variables Globales de Estado](#variables-globales-de-estado)
-14. [Paleta de Colores y CSS](#paleta-de-colores-y-css)
-15. [Limitaciones Conocidas](#limitaciones-conocidas)
-16. [Próximas Mejoras Sugeridas](#próximas-mejoras-sugeridas)
+1. [Descripción general](#1-descripción-general)
+2. [Arquitectura y stack](#2-arquitectura-y-stack)
+3. [Estructura del archivo](#3-estructura-del-archivo)
+4. [Variables globales de estado](#4-variables-globales-de-estado)
+5. [Módulo de persistencia](#5-módulo-de-persistencia)
+6. [Flujo wizard paso a paso](#6-flujo-wizard-paso-a-paso)
+7. [Módulo de ítems](#7-módulo-de-ítems)
+8. [Módulo de firma canvas](#8-módulo-de-firma-canvas)
+9. [Módulo PDF / impresión](#9-módulo-pdf--impresión)
+10. [Módulo historial](#10-módulo-historial)
+11. [Sistema de folios](#11-sistema-de-folios)
+12. [Referencia de funciones](#12-referencia-de-funciones)
+13. [Paleta CSS y variables](#13-paleta-css-y-variables)
+14. [Bugs documentados y estado de corrección](#14-bugs-documentados-y-estado-de-corrección)
+15. [Flujo de desarrollo y despliegue](#15-flujo-de-desarrollo-y-despliegue)
+16. [Limitaciones conocidas y mejoras futuras](#16-limitaciones-conocidas-y-mejoras-futuras)
 
 ---
 
-## Descripción General
+## 1. Descripción general
 
-Aplicación web de una sola página (`index.html`) que permite a los supervisores de la AGA generar, firmar e imprimir solicitudes formales de adquisición de materiales. Funciona completamente offline una vez cargada (no requiere servidor ni backend).
+**Solicitud Adquisición Supervisor** es una Progressive Web App (PWA) de archivo único (`index.html`) diseñada para generar, firmar, imprimir y archivar solicitudes formales de adquisición de materiales para escuadrillas de la Academia de Guerra Aérea (AGA).
 
-**Nombre institucional del documento generado:**
-`SOLICITUD DE ADQUISICIÓN DE MATERIALES`
+### Propósito del documento generado
 
-**Folio generado automáticamente:**
-`ADQ-{AÑO}-{NNNN}` — ej. `ADQ-2026-0003`
+El formulario produce una **Solicitud de Adquisición de Materiales** con:
+
+- Folio correlativo en formato `ADQ-{AÑO}-{NNNN}` (ej. `ADQ-2026-0003`)
+- Fecha, escuadrilla solicitante y Cdte. de Escuadrilla
+- Lista de materiales con cantidades, unidades, descripción y precios unitarios
+- Subtotal neto, IVA 19 % y TOTAL con formato CLP (`$ X.XXX`)
+- Firma a mano (canvas digital) con nombre, grado y cargo del firmante
+- Impresión PDF lista para trámite o archivo físico
+
+### Características principales
+
+- **100 % offline** una vez cargada: sin dependencias de red durante el uso
+- **PWA instalable** en Android/iPhone con icono en pantalla de inicio
+- **Historial persistente** en `localStorage` con carga, edición y eliminación de solicitudes anteriores
+- **Firma digital canvas** con soporte táctil y mouse, capturada y recuperable desde el historial
+- **Sin framework**: HTML5 + CSS variables + JavaScript ES5 puro
 
 ---
 
-## Arquitectura
+## 2. Arquitectura y stack
 
 ```
-┌─────────────────────────────────────────────────┐
-│                   index.html                    │
-│  ┌─────────┐  ┌────────────┐  ┌─────────────┐  │
-│  │  HTML   │  │    CSS     │  │  Vanilla JS │  │
-│  │  DOM    │  │ Variables  │  │  (sin fw.)  │  │
-│  └────┬────┘  └─────┬──────┘  └──────┬──────┘  │
-│       │             │                │          │
-│       └─────────────┴────────────────┘          │
-│                       │                         │
-│          ┌────────────┴────────────┐            │
-│          │       localStorage      │            │
-│          │  fach_historial (JSON)  │            │
-│          │  fach_folio    (int)    │            │
-│          └─────────────────────────┘            │
-│                                                 │
-│          ┌──────────────────────────┐           │
-│          │    Canvas API (firma)    │           │
-│          └──────────────────────────┘           │
-│                                                 │
-│          ┌──────────────────────────┐           │
-│          │  window.print() → PDF   │           │
-│          └──────────────────────────┘           │
-└─────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────┐
+│               index.html  (archivo único)           │
+│                                                     │
+│  ┌──────────┐  ┌──────────┐  ┌────────────────────┐│
+│  │  <style> │  │  <body>  │  │     <script>       ││
+│  │ CSS vars │  │ 4 paneles│  │  lógica completa   ││
+│  │ @print   │  │ nav-bar  │  │  28 funciones      ││
+│  └──────────┘  └──────────┘  └────────────────────┘│
+└─────────────────────────────────────────────────────┘
+          │                        │
+          ▼                        ▼
+   localStorage               window.print()
+   fach_folio (int)           @media print
+   fach_historial (JSON)      #print-area DOM
 ```
 
-**Stack:**
-| Capa | Tecnología |
-|---|---|
-| UI | HTML5 semántico + CSS variables |
-| Lógica | Vanilla JavaScript (ES5 compatible) |
-| Persistencia | `localStorage` (clave `fach_historial` y `fach_folio`) |
-| Firma | Canvas API (eventos touch + mouse) |
-| PDF | `@media print` + `window.print()` |
-| Iconografía | Emojis Unicode (sin dependencias externas) |
+| Capa | Tecnología | Detalle |
+|---|---|---|
+| Lenguaje | HTML5 + CSS3 + JavaScript ES5 | Sin transpiladores ni bundlers |
+| Persistencia | `localStorage` | Dos claves: `fach_folio` y `fach_historial` |
+| Firma | Canvas API | Touch + Mouse, DataURL base64 |
+| PDF | `@media print` + `window.print()` | `#print-area` oculto en pantalla, visible al imprimir |
+| PWA | `manifest.json` + `sw.js` (externos) | Service worker cache-first |
+| Hosting | GitHub Pages | `vgarcesb-cpu.github.io/solicitud-adquisicion/` |
+| Protección | Cloudflare (proxy + Zero Trust) | Capa DNS sobre GitHub Pages |
 
 ---
 
-## Estructura del Archivo
+## 3. Estructura del archivo
 
 ```
 index.html
 │
 ├── <head>
-│   ├── Meta viewport (sin zoom — apto S25)
-│   ├── <link rel="apple-touch-icon">  ← ícono PWA inline base64
-│   └── <style>                        ← Todo el CSS en :root variables
+│   ├── <meta> viewport, charset, theme-color
+│   ├── <link> manifest.json, apple-touch-icon
+│   └── <style>
+│       ├── :root { variables CSS }
+│       ├── Reset y layout base (.app, .app-header)
+│       ├── .steps-bar (indicador de pasos 1-2-3)
+│       ├── #panel-1, #panel-2, #panel-3, #panel-hist
+│       ├── .item-card, .sig-wrap, #sig-canvas
+│       ├── #nav-bar (botones Atrás / Historial / Reset / Siguiente)
+│       ├── .toast (notificación flotante)
+│       └── @media print { oculta todo, muestra #print-area }
 │
 └── <body>
-    │
-    ├── .app                           ← Contenedor flex columna 100dvh
-    │   ├── .app-header                ← Logo AGA + título + folio miniatura
-    │   ├── .steps-bar                 ← Barra de pasos (1-2-3)
+    ├── .app
+    │   ├── .app-header
+    │   │   ├── img.logo-aga  (icono base64 inline)
+    │   │   ├── h1 "Solicitud de Adquisición"
+    │   │   └── .folio-badge  (folio próximo, ej. ADQ-2026-0001)
     │   │
-    │   ├── .steps-content             ← Zona scrollable de contenido
-    │   │   ├── #panel-1  (Datos)
-    │   │   ├── #panel-2  (Materiales)
-    │   │   ├── #panel-3  (Resumen + Firma)
-    │   │   └── #panel-hist (Historial)
+    │   ├── .steps-bar
+    │   │   ├── .step[data-step="1"] "Datos"
+    │   │   ├── .step[data-step="2"] "Materiales"
+    │   │   └── .step[data-step="3"] "Firma"
     │   │
-    │   └── #nav-bar                   ← Botones Atrás / Historial / Reset / Siguiente
+    │   ├── .steps-content
+    │   │   ├── #panel-1  ← Paso 1: Datos generales
+    │   │   ├── #panel-2  ← Paso 2: Lista de materiales
+    │   │   ├── #panel-3  ← Paso 3: Resumen + firma canvas
+    │   │   └── #panel-hist ← Vista historial (reemplaza pasos)
+    │   │
+    │   └── #nav-bar
+    │       ├── #btn-back    "← Atrás"
+    │       ├── #btn-hist    "Historial"
+    │       ├── #btn-reset   "Nuevo"
+    │       └── #btn-next    "Siguiente →" / "Guardar"
     │
-    ├── .toast                         ← Notificación flotante
-    ├── #print-area                    ← DOM oculto para impresión
-    └── <script>                       ← Lógica completa
+    ├── .toast#toast
+    │
+    ├── #print-area  ← DOM oculto, se puebla en imprimirPDF()
+    │   ├── encabezado institucional AGA
+    │   ├── tabla de datos (folio, fecha, escuadrilla, cdte.)
+    │   ├── tabla de ítems (cant, und, desc, precio unit., subtotal)
+    │   ├── fila totales (neto, IVA 19%, TOTAL)
+    │   └── sección firma (imagen canvas + nombre/grado/cargo)
+    │
+    └── <script>
+        └── (ver sección 12 — Referencia de funciones)
 ```
 
 ---
 
-## Flujo de Usuario (Wizard 3 pasos)
+## 4. Variables globales de estado
+
+Todas las variables se declaran con `var` en el ámbito global del `<script>`.
+
+| Variable | Tipo | Valor inicial | Propósito |
+|---|---|---|---|
+| `pasoActual` | `Number` | `1` | Paso del wizard activo (1, 2 o 3) |
+| `items` | `Array` | `[]` | Ítems en edición durante la sesión actual |
+| `editIndex` | `Number` | `-1` | `-1` = nueva solicitud; `≥ 0` = índice en `solicitudes[]` que se está editando |
+| `solicitudes` | `Array` | `[]` | Espejo en memoria del `localStorage` `fach_historial` |
+| `sigDataURL` | `String` | `''` | DataURL base64 de la firma capturada en la sesión actual |
+| `sigURL` | `String` | `''` | ⚠️ **Variable huérfana** — nunca se lee; debe eliminarse en la próxima refactorización |
+
+### Diagrama de ciclo de vida de estado
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                      INICIO / init()                         │
-│  • Leer fach_folio → siguiente número                        │
-│  • Prellenar: año, fecha hoy, folio correlativo              │
-│  • Agregar ítem vacío por defecto                            │
-└───────────────────────┬──────────────────────────────────────┘
-                        │
-                        ▼
-┌──────────────────────────────────────────────────────────────┐
-│  PASO 1 — DATOS GENERALES              (#panel-1)            │
-│                                                              │
-│  Campo              ID elemento           Tipo              │
-│  ─────────────────  ────────────────────  ────────────────  │
-│  Folio (año)        #folio-anio           text / 4 dígitos  │
-│  Folio (número)     #folio-num            text / readonly   │
-│  Fecha              #fecha                date              │
-│  Escuadrilla        #escuadrilla          select            │
-│  Cdte. Escuadrilla  #cdte                 text              │
-│  Observaciones      #observaciones        textarea          │
-│                                                              │
-│  Opciones escuadrilla:                                       │
-│    • Bandada Instalaciones                                   │
-│    • Bandada Alimentación                                    │
-│    • Bandada Transporte                                      │
-└───────────────────────┬──────────────────────────────────────┘
-                        │ [Siguiente →]
-                        ▼
-┌──────────────────────────────────────────────────────────────┐
-│  PASO 2 — MATERIALES                   (#panel-2)            │
-│                                                              │
-│  Por cada ítem en el array `items[]`:                        │
-│    • Cant.        (number, mín 1)                            │
-│    • Unidad       (select: UN/KG/MT/LT/CJ/PAQ/GL)           │
-│    • Descripción  (text libre)                               │
-│    • P. Unitario  (número formato miles CL)                  │
-│    • Subtotal     (calc. automático, solo lectura)           │
-│                                                              │
-│  Totales automáticos:                                        │
-│    Subtotal neto = Σ(cant × p.unitario)                      │
-│    IVA (19%)     = subtotal × 0.19                           │
-│    TOTAL         = subtotal × 1.19                           │
-│                                                              │
-│  [+ Agregar ítem]  — máx sin límite                          │
-│  [×] en cada ítem  — eliminar (mín 1 ítem)                   │
-└───────────────────────┬──────────────────────────────────────┘
-                        │ [Siguiente →]
-                        ▼
-┌──────────────────────────────────────────────────────────────┐
-│  PASO 3 — RESUMEN + FIRMA              (#panel-3)            │
-│                                                              │
-│  Sección Resumen:                                            │
-│    • Tabla resumen de todos los campos del Paso 1            │
-│    • Lista de ítems con subtotales                           │
-│    • Totales (neto / IVA / TOTAL)                            │
-│                                                              │
-│  Sección Firma:                                              │
-│    • #firma-nombre   (texto mayúsculas)                      │
-│    • #firma-grado    (grado militar)                         │
-│    • #firma-cargo    (cargo)                                 │
-│    • #sig-canvas     (firma a mano: touch + mouse)           │
-│    • [Borrar firma]                                          │
-│                                                              │
-│  Acciones:                                                   │
-│    [🖨️ Guardar / Imprimir PDF] → imprimirPDF()              │
-│    [💾 Guardar en historial]   → guardarHistorial()          │
-│    [+ Nuevo] (btn Siguiente)   → nuevoFormulario()           │
-└──────────────────────────────────────────────────────────────┘
-
-        [📁 Historial]  →  panel-hist
-                        ←  [← Volver al formulario]
-```
-
-### Diagrama de transiciones de pasos
-
-```
-           irPaso(n)
-    ┌─────────────────────────────────────┐
-    │                                     │
-   [1] ──→ [2] ──→ [3]                   │
-    │  ←──  │  ←──  │                    │
-    │        │       └── guardarHistorial()
-    │        │             incrementa folio
-    │        │             resetea form
-    │        │             irPaso(1)
-    │        │
-    │       [HIST]  ─── renderHistorial()
-    │                     cargarHistorial(i) → irPaso(1)
-    │                     eliminarHistorial(i)
-    └─────────────────────────────────────┘
-```
-
----
-
-## Modelo de Datos
-
-### Objeto Ítem (en memoria — array `items[]`)
-
-```javascript
-{
-  cant:       Number,   // Cantidad (ej: 3)
-  unidad:     String,   // "UN" | "KG" | "MT" | "LT" | "CJ" | "PAQ" | "GL"
-  descripcion: String,  // Texto libre
-  pUnitario:  Number    // Precio unitario (sin formato, número puro)
-}
-```
-
-### Objeto Solicitud (guardado en historial)
-
-```javascript
-{
-  folioAnio:    String,   // "2026"
-  folioNum:     String,   // "0003"
-  fecha:        String,   // "2026-04-08" (ISO)
-  escuadrilla:  String,   // "Bandada Instalaciones"
-  cdte:         String,   // Nombre del comandante
-  observaciones: String,  // Texto libre
-  firmaNombre:  String,   // Nombre en firma
-  firmaGrado:   String,   // Grado militar
-  firmaCargo:   String,   // Cargo
-  items:        Array,    // Copia profunda de items[] en ese momento
-  total:        Number    // Total con IVA
-}
-```
-
----
-
-## Sistema de Folios
-
-```
-localStorage "fach_folio"  →  entero (último folio USADO)
-                                ↓
 init()
-  getFolio() → n
-  folio a mostrar = n + 1
-  folio formateado = String(n+1).padStart(4,'0')
-  → "#folio-num" = "0001"
-  → "ADQ-2026-0001" mostrado en header
+  │
+  ├── getFolio()  →  pasoActual = 1
+  ├── loadLS()    →  solicitudes[]  (espejo del localStorage)
+  └── mostrarFolio()
+
+        ↓  Usuario navega pasos
+
+irPaso(n)
+  │
+  ├── Si saliendo paso 3 → capturarFirma()  →  sigDataURL guardada
+  ├── Si entrando paso 3 → restaurarFirma() →  sigDataURL pintada en canvas
+  └── actualizarResumen()  (solo al entrar paso 3)
+
+        ↓  Usuario confirma
 
 guardarHistorial()
-  usa folio del campo #folio-num
-  setFolio(usado)          ← guarda el que se usó
-  siguiente = usado + 1    ← prepara el próximo
-  #folio-num = folioStr(siguiente)
+  │
+  ├── Construye objeto rec { folio, datos, items, total, sigDataURL }
+  ├── solicitudes.push(rec)
+  ├── saveLS()
+  ├── setFolio(n+1)
+  └── irPaso(1)  (retorna al inicio, NO limpia campos)
 
-resetContador()
-  setFolio(0)
-  #folio-num = "0001"      ← vuelve desde cero
+        ↓  Usuario presiona "Nuevo"
+
+nuevo()  →  limpiarCampos()  +  limpiarFirma()  +  irPaso(1)
 ```
-
-**Formato folio:** `ADQ-{#folio-anio}-{#folio-num}`
-- Año: editable por el usuario (campo `#folio-anio`)
-- Número: readonly, incremento automático, 4 dígitos con ceros a la izquierda
 
 ---
 
-## Módulo de Ítems y Cálculo
+## 5. Módulo de persistencia
+
+### Claves en `localStorage`
+
+| Clave | Tipo serializado | Descripción |
+|---|---|---|
+| `fach_folio` | `String` (int) | Último número de folio **utilizado** |
+| `fach_historial` | `String` (JSON array) | Array de objetos solicitud |
+
+### Funciones de persistencia
 
 ```javascript
-// Flujo de edición de un ítem:
-updItem(i, 'cant', valor)
-  └─→ items[i].cant = parseFloat(valor) || 0
-  └─→ renderItems()
+// Lee fach_folio y retorna entero (0 si no existe)
+function getFolio() { return parseInt(localStorage.getItem('fach_folio') || '0'); }
 
-updItem(i, 'pUnitario', valor)
-  └─→ strip puntos miles → parsear float
-  └─→ items[i].pUnitario = resultado
-  └─→ renderItems()
+// Escribe un nuevo valor de folio
+function setFolio(n) { localStorage.setItem('fach_folio', String(n)); }
 
-// Cálculos:
-calcSub(it) = it.cant × it.pUnitario
-
-calcTotals() = {
-  sub:   Σ calcSub(item)  para todos los items
-  iva:   sub × 0.19
-  total: sub × 1.19
+// Serializa solicitudes[] al localStorage — punto único de escritura
+function saveLS() {
+  try {
+    localStorage.setItem('fach_historial', JSON.stringify(solicitudes));
+  } catch(e) {
+    alert('Error al guardar en almacenamiento local: ' + e.message);
+  }
 }
 
-// Formato visual:
-fmtN(n) = Math.round(n).toLocaleString('es-CL')
-          → "1.234.567" (puntos de miles, Chile)
+// Carga historial al iniciar la app
+function loadLS() {
+  try {
+    var raw = localStorage.getItem('fach_historial');
+    solicitudes = raw ? JSON.parse(raw) : [];
+  } catch(e) {
+    solicitudes = [];
+  }
+}
 ```
 
-**Ciclo render:** Cada cambio en un ítem llama `renderItems()` que reconstruye todo el DOM de ítems y actualiza los 3 totales en pantalla.
+### Flujo de reset del contador
+
+```
+resetContador()
+  │
+  ├── setFolio(0)           ← localStorage fach_folio = "0"
+  └── mostrarFolio()        ← #folio-num muestra "0001"
+```
 
 ---
 
-## Módulo de Firma Digital
+## 6. Flujo wizard paso a paso
+
+### Vista general
 
 ```
-initCanvas()
-  ├── sc.width  = sc.offsetWidth   (ancho real del contenedor)
-  ├── sc.height = 200px
-  ├── ctx: strokeStyle=#000, lineWidth=2, lineCap=round
-  │
-  ├── Eventos MOUSE: mousedown → beginPath/moveTo
-  │                 mousemove → lineTo/stroke  (si drawing)
-  │                 mouseup / mouseleave → drawing=false
-  │
-  └── Eventos TOUCH: touchstart → beginPath/moveTo
-                    touchmove  → lineTo/stroke  (preventDefault)
-                    touchend   → drawing=false
-
-capturarFirma()
-  ├── Crea canvas temporal mismo tamaño
-  ├── Fondo blanco (fillRect)
-  ├── drawImage del sig-canvas
-  └── Retorna DataURL JPEG calidad 0.7
-
-limpiarFirma()
-  └── clearRect(0,0,w,h)
-
-// Persistencia en sesión:
-sigDataURL (var global)
-  ├── Se captura al navegar fuera del Paso 3
-  └── Se restaura al volver al Paso 3 (restaurarFirma)
+┌──────────────────────────────────────────────────────────────────┐
+│  PASO 1                  PASO 2                  PASO 3          │
+│  Datos generales         Materiales              Firma y resumen  │
+│                                                                   │
+│  • Folio (readonly)      • Agregar ítems         • Resumen datos  │
+│  • Año (editable)        • Cant / Und / Desc     • Resumen ítems  │
+│  • Fecha                 • Precio unitario        • Canvas firma   │
+│  • Escuadrilla (select)  • Totales en tiempo     • Nombre/Grado   │
+│  • Cdte. Escuadrilla       real                  • Cargo          │
+│  • Observaciones         • Eliminar ítem         • Imprimir PDF   │
+│                                                  • Guardar        │
+└──────────────────────────────────────────────────────────────────┘
+         │  "Siguiente"              │  "Siguiente"
+         ▼                          ▼
+     irPaso(2)                  irPaso(3)
+                                     │
+                             capturarFirma()
+                             actualizarResumen()
+                             initCanvas()
 ```
 
-**Nota S25:** `touch-action: none` en el canvas y `{passive:false}` en los listeners previenen el scroll mientras se firma.
+### Paso 1 — Datos generales
+
+Campos del formulario:
+
+| ID | Tipo | Descripción | Validación |
+|---|---|---|---|
+| `#folio-anio` | `input[number]` | Año del folio (editable) | requerido |
+| `#folio-num` | `input[text]` readonly | Número correlativo (ej. `0003`) | readonly, auto |
+| `#fecha` | `input[date]` | Fecha de la solicitud | requerido |
+| `#escuadrilla` | `select` | Bandada Instalaciones / Alimentación / Transporte | requerido |
+| `#cdte` | `input[text]` | Nombre del Cdte. Escuadrilla | requerido |
+| `#observaciones` | `textarea` | Observaciones adicionales | opcional |
+
+Evento "Siguiente": `irPaso(2)` — valida campos obligatorios antes de avanzar.
+
+### Paso 2 — Materiales
+
+La lista de ítems se gestiona dinámicamente. Cada ítem contiene:
+
+| Campo | Tipo | Unidades disponibles |
+|---|---|---|
+| `cant` | `Number` | — |
+| `und` | `String` | UN / KG / MT / LT / CJ / PAQ / GL |
+| `desc` | `String` | Descripción libre |
+| `precioUnitario` | `Number` | CLP (sin formato) |
+
+Los totales se recalculan en cada modificación:
+
+```
+subtotalNeto = Σ (cant[i] × precioUnitario[i])
+IVA          = subtotalNeto × 0.19
+TOTAL        = subtotalNeto + IVA
+```
+
+Evento "Siguiente": `irPaso(3)` — requiere al menos 1 ítem.
+
+### Paso 3 — Firma y resumen
+
+Al entrar al paso 3 ocurre la siguiente secuencia:
+
+```
+irPaso(3)
+  │
+  ├── actualizarResumen()
+  │     ├── Puebla #resumen-datos con folio, fecha, escuadrilla, cdte.
+  │     └── Puebla #resumen-items con tabla de ítems + totales
+  │
+  ├── restaurarFirma()
+  │     └── Si sigDataURL ≠ '' → pinta canvas con la firma de sesión
+  │
+  └── setTimeout(initCanvas, 150)   ← FIX-005 obligatorio
+        └── initCanvas()
+              ├── ajustarCanvas()   ← mide desde .sig-wrap (padre)
+              ├── Registra eventos touch (touchstart/move/end)
+              └── Registra eventos mouse (mousedown/move/up)
+```
+
+Botones disponibles en paso 3:
+
+| Botón | Función | Efecto |
+|---|---|---|
+| "Imprimir PDF" | `imprimirPDF()` | Puebla `#print-area` y llama `window.print()` tras 700 ms |
+| "Limpiar firma" | `limpiarFirma()` | Limpia canvas y resetea `sigDataURL` |
+| "Guardar" (nav) | `guardarHistorial()` | Persiste en `localStorage` e incrementa folio |
 
 ---
 
-## Módulo PDF / Impresión
+## 7. Módulo de ítems
+
+### Ciclo de vida de un ítem
+
+```
+agregarItem()
+  │
+  ├── Lee campos #cant, #und, #desc, #precio-unit del formulario de ítem
+  ├── Valida que cant > 0 y desc no esté vacía
+  ├── items.push({ cant, und, desc, precioUnitario })
+  ├── renderItems()    ← redibuja la lista
+  └── calcTotals()     ← actualiza subtotal, IVA, total en pantalla
+
+eliminarItem(i)
+  │
+  ├── items.splice(i, 1)
+  ├── renderItems()
+  └── calcTotals()
+```
+
+### Función `renderItems()`
+
+Genera HTML dinámico por cada elemento en `items[]`. Cada tarjeta muestra:
+
+```
+┌─────────────────────────────────────────────────┐
+│  [3 UN]  Cable eléctrico 2.5mm        $ 4.500   │
+│                                    [✕ Eliminar] │
+└─────────────────────────────────────────────────┘
+```
+
+### Función `calcTotals()`
+
+```javascript
+function calcTotals() {
+  var neto = items.reduce(function(sum, it) {
+    return sum + (it.cant * it.precioUnitario);
+  }, 0);
+  var iva   = neto * 0.19;
+  var total = neto + iva;
+  document.getElementById('subtotal-neto').textContent = fmtN(neto);
+  document.getElementById('iva-monto').textContent     = fmtN(iva);
+  document.getElementById('total-monto').textContent   = fmtN(total);
+}
+```
+
+---
+
+## 8. Módulo de firma canvas
+
+### Arquitectura del canvas
+
+```html
+<div class="sig-wrap" id="sig-wrap">        ← contenedor padre (referencia de medición)
+  <canvas id="sig-canvas"></canvas>         ← superficie de dibujo
+</div>
+```
+
+### Inicialización correcta (incluye FIX-004 y FIX-005)
+
+```javascript
+var canvasIniciado = false;    // guard para evitar listeners duplicados
+
+function initCanvas() {
+  var canvas = document.getElementById('sig-canvas');
+  if (!canvas) return;
+
+  // FIX-004: eliminar listeners anteriores antes de añadir nuevos
+  if (canvasIniciado) {
+    canvas.removeEventListener('touchstart', onTouchStart);
+    canvas.removeEventListener('touchmove',  onTouchMove);
+    canvas.removeEventListener('touchend',   onTouchEnd);
+    canvas.removeEventListener('mousedown',  onMouseDown);
+    canvas.removeEventListener('mousemove',  onMouseMove);
+    canvas.removeEventListener('mouseup',    onMouseUp);
+  }
+
+  ajustarCanvas();   // mide desde .sig-wrap
+
+  canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+  canvas.addEventListener('touchmove',  onTouchMove,  { passive: false });
+  canvas.addEventListener('touchend',   onTouchEnd);
+  canvas.addEventListener('mousedown',  onMouseDown);
+  canvas.addEventListener('mousemove',  onMouseMove);
+  canvas.addEventListener('mouseup',    onMouseUp);
+
+  canvasIniciado = true;
+}
+
+// FIX-005: siempre con setTimeout de 150ms mínimo
+function irPaso(n) {
+  // ...
+  if (n === 3) {
+    setTimeout(initCanvas, 150);
+  }
+}
+```
+
+### Función `ajustarCanvas()`
+
+```javascript
+function ajustarCanvas() {
+  var wrap   = document.getElementById('sig-wrap');   // mide el PADRE
+  var canvas = document.getElementById('sig-canvas');
+  if (!wrap || !canvas) return;
+  canvas.width  = wrap.offsetWidth;    // dimensiones reales del contenedor
+  canvas.height = wrap.offsetHeight;
+}
+```
+
+### Captura y restauración de firma
+
+```javascript
+// Al salir del paso 3 (hacia paso 2 o al guardar)
+function capturarFirma() {
+  var canvas = document.getElementById('sig-canvas');
+  if (canvas) sigDataURL = canvas.toDataURL('image/png');
+}
+
+// Al volver al paso 3
+function restaurarFirma() {
+  if (!sigDataURL) return;
+  var canvas = document.getElementById('sig-canvas');
+  var ctx    = canvas.getContext('2d');
+  var img    = new Image();
+  img.onload = function() {
+    // FIX-006 (canvas): dimensiones explícitas
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  };
+  img.src = sigDataURL;
+}
+
+// Limpiar firma — FIX-001: limpia sigDataURL (no sigURL)
+function limpiarFirma() {
+  var canvas = document.getElementById('sig-canvas');
+  if (canvas) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+  sigDataURL = '';    // ← correcto
+}
+```
+
+### Listener de rotación de pantalla (FIX-010)
+
+```javascript
+window.addEventListener('resize', function() {
+  if (pasoActual === 3) {
+    ajustarCanvas();
+    restaurarFirma();
+  }
+});
+```
+
+---
+
+## 9. Módulo PDF / impresión
+
+### Flujo completo de `imprimirPDF()`
 
 ```
 imprimirPDF()
   │
-  ├── 1. Poblar #print-area (DOM oculto):
-  │       #p-folio, #p-fecha, #p-escuadrilla, #p-cdte
-  │       #p-obs, #p-sub, #p-iva, #p-total
-  │       #p-items  → <tbody> con <tr> por cada ítem con descripción
-  │       #p-sig-img → DataURL de la firma (si existe)
-  │       #p-firma-nombre/grado/cargo
+  ├── Construye HTML del documento en #print-area
+  │   ├── Encabezado AGA (logo + título institucional)
+  │   ├── Tabla datos (folio, fecha, escuadrilla, cdte.)
+  │   ├── Tabla ítems (cant, und, descripción, precio unit., subtotal)
+  │   ├── Fila totales (neto, IVA 19%, TOTAL)
+  │   └── Sección firma (<img src=sigDataURL> + nombre/grado/cargo)
   │
-  ├── 2. setTimeout(print, 200ms)   ← evita pantalla blanca en S25
-  │
-  └── 3. @media print:
-          body > * { display: none }   ← oculta la app
-          #print-area { display: block } ← muestra solo el documento
-          @page { size: letter portrait; margin: 15mm 20mm }
+  └── setTimeout(function() { window.print(); }, 700)
+      ← mínimo 700ms (BUG-5 tenía 200ms — insuficiente en S25)
 ```
 
-**Estructura del PDF impreso:**
+### Reglas obligatorias de impresión (AGA)
+
+```css
+/* Elementos con fondo de color */
+background-color: #003087 !important;
+-webkit-print-color-adjust: exact !important;
+border: 2px solid #000 !important;
+
+/* Tamaño de página */
+@page {
+  size: letter portrait;
+  margin: 15mm 20mm 15mm 20mm;
+}
+
+/* Durante impresión */
+@media print {
+  body > * { display: none !important; }
+  #print-area { display: block !important; }
+}
 ```
-Encabezado institucional centrado
-Título subrayado: SOLICITUD DE ADQUISICIÓN DE MATERIALES
-Folio + Fecha (fila flex)
-Escuadrilla + Cdte. (grid 2 cols)
-Tabla de ítems (Cant/Unidad/Descripción/P.Unitario/Subtotal)
-Totales (derecha: neto, IVA, TOTAL bold)
-Observaciones
-Firma (imagen canvas + nombre/grado/cargo centrados)
-```
+
+### Por qué 700 ms y no menos
+
+El Samsung S25 (juez definitivo del stack AGA) aplica una transición visual al activar el modo impresión. Si `window.print()` se llama antes de que la transición termine, el diálogo de impresión se abre con el documento en blanco o parcialmente renderizado. Los 700 ms garantizan que el DOM de `#print-area` esté completamente pintado antes de que el navegador capture la vista.
 
 ---
 
-## Módulo Historial
+## 10. Módulo historial
+
+### Modelo de datos — objeto solicitud
+
+```javascript
+{
+  folioAnio:       Number,   // ej. 2026
+  folioNum:        String,   // ej. "0003"
+  fecha:           String,   // "YYYY-MM-DD"
+  escuadrilla:     String,   // "Bandada Instalaciones"
+  cdte:            String,   // "Cap. Juan Pérez"
+  observaciones:   String,
+  firmaNombre:     String,
+  firmaGrado:      String,
+  firmaCargo:      String,
+  items:           Array,    // copia profunda de items[]
+  total:           Number,   // con IVA incluido
+  sigDataURL:      String    // DataURL de la firma PNG base64
+  // ← BUG-6: este campo faltaba antes de la corrección
+}
+```
+
+### Funciones del historial
 
 ```
 verHistorial()
-  ├── Activa #panel-hist
-  ├── Oculta #nav-bar (agrega div con botón "Volver")
+  │
+  ├── Oculta paneles 1-2-3 y nav-bar (.oculta { display: none })
+  │   (BUG-3: faltaba esta clase en el CSS original)
+  ├── Muestra #panel-hist
   └── renderHistorial()
-
-renderHistorial()
-  └── solicitudes.slice().reverse()
-      → Por cada registro: .hist-item-app
-        • Folio + fecha
-        • Escuadrilla + N° ítems + total formateado
-        • Observaciones (si existen)
-        • [Eliminar] (stopPropagation para no abrir)
-        • onclick → cargarHistorial(i)
+        └── Por cada solicitud en solicitudes[]:
+              Genera tarjeta con folio, fecha, escuadrilla, total
+              Botones: [Cargar] [Eliminar]
 
 cargarHistorial(i)
-  ├── Puebla todos los campos del formulario
-  ├── items[] ← copia profunda de h.items
-  ├── renderItems()
-  ├── editIndex = i   ← al guardar, sobreescribe en vez de agregar
+  │
+  ├── editIndex = i
+  ├── Puebla todos los campos del paso 1 desde solicitudes[i]
+  ├── items = JSON.parse(JSON.stringify(solicitudes[i].items))
+  ├── sigDataURL = solicitudes[i].sigDataURL || ''
+  ├── Oculta #panel-hist, muestra nav-bar
   └── irPaso(1)
 
-guardarHistorial()
-  ├── Lee TODOS los campos en variables locales
-  ├── Construye objeto solicitud
-  ├── Si editIndex >= 0 → sobrescribe solicitudes[editIndex]
-  │   Else → solicitudes.push(rec)
-  ├── localStorage.setItem('fach_historial', JSON.stringify(...))
-  ├── Muestra toast confirmación
-  └── setTimeout 1000ms:
-        • Incrementa folio
-        • Limpia formulario
-        • items = [], agregarItem()
-        • irPaso(1)
-
 eliminarHistorial(i)
-  ├── solicitudes.splice(i,1)
+  │
+  ├── solicitudes.splice(i, 1)
   ├── saveLS()
   └── renderHistorial()
 ```
 
----
+### Flujo de edición de una solicitud existente
 
-## Persistencia (localStorage)
-
-| Clave | Tipo | Descripción |
-|---|---|---|
-| `fach_folio` | String (int) | Último número de folio **usado**. Default 0. |
-| `fach_historial` | JSON string | Array de objetos `Solicitud`. |
-
-**Lectura segura (con try/catch):**
-```javascript
-getFolio()  → parseInt(localStorage.getItem('fach_folio') || '0')
-saveLS()    → localStorage.setItem('fach_historial', JSON.stringify(solicitudes))
+```
+cargarHistorial(i)                editIndex = i
+       │
+       ▼
+  irPaso(1) → usuario modifica → irPaso(2) → irPaso(3) → guardarHistorial()
+                                                                │
+                                                   Si editIndex ≥ 0:
+                                                   solicitudes[editIndex] = rec  (sobreescribe)
+                                                   Si editIndex = -1:
+                                                   solicitudes.push(rec)         (nueva)
 ```
 
-**Límite práctico:** localStorage ≈ 5MB. Con firmas JPEG calidad 0.7 ≈ 30-80KB por solicitud, capacidad aproximada de 60-160 registros con firma. Sin firma, cientos de registros.
+---
+
+## 11. Sistema de folios
+
+### Lógica completa
+
+```
+Estado inicial (primera ejecución):
+  localStorage "fach_folio" → no existe
+  getFolio() → 0
+  mostrarFolio() → muestra "ADQ-2026-0001" (próximo)
+
+Al guardar solicitud:
+  folioUsado = getFolio() + 1
+  rec.folioNum = folioStr(folioUsado)     → "0001"
+  setFolio(folioUsado)                    → localStorage = "1"
+  mostrarFolio()                          → muestra "ADQ-2026-0002" (próximo)
+
+Al hacer reset del contador:
+  setFolio(0)
+  mostrarFolio()                          → muestra "ADQ-2026-0001"
+
+Función folioStr(n):
+  return String(n).padStart(4, '0')       → "0001", "0015", "0123"
+```
+
+### Formato del folio
+
+```
+ADQ - 2026 - 0003
+│     │      │
+│     │      └── Número correlativo (4 dígitos, con ceros a la izquierda)
+│     └────────── Año (editable en el campo #folio-anio)
+└──────────────── Prefijo fijo "ADQ"
+```
 
 ---
 
-## Referencia de Funciones
+## 12. Referencia de funciones
+
+### Inicialización
 
 | Función | Descripción |
 |---|---|
-| `init()` | Inicialización al cargar. Folio siguiente, fecha hoy, primer ítem. |
-| `irPaso(n)` | Navega al paso 1, 2 o 3. Actualiza steps-bar, captura firma si sale del 3. |
-| `agregarItem()` | Push a `items[]` con valores vacíos. Llama `renderItems()`. |
-| `eliminarItem(i)` | Splice en `items[]`. Solo si hay más de 1. |
-| `updItem(i, k, v)` | Actualiza `items[i][k]` con parseo adecuado según campo. |
-| `calcSub(it)` | Retorna `cant × pUnitario` de un ítem. |
-| `calcTotals()` | Retorna `{sub, iva, total}` del array completo. |
-| `renderItems()` | Reconstruye el DOM de ítems y actualiza totales en pantalla. |
-| `actualizarResumen()` | Puebla el panel de resumen (Paso 3) con datos actuales. |
-| `initCanvas()` | Inicializa el canvas de firma con listeners touch+mouse. |
-| `capturarFirma()` | Retorna DataURL JPEG del canvas. |
-| `limpiarFirma()` | Limpia el canvas. |
-| `restaurarFirma()` | Dibuja `sigDataURL` en el canvas tras regresar al Paso 3. |
-| `imprimirPDF()` | Puebla `#print-area` y lanza `window.print()` con delay 200ms. |
-| `guardarHistorial()` | Guarda solicitud en `solicitudes[]` y localStorage. Incrementa folio. |
-| `cargarHistorial(i)` | Carga solicitud[i] en el formulario. Activa modo edición. |
-| `eliminarHistorial(i)` | Elimina solicitud[i] de array y localStorage. |
-| `nuevoFormulario()` | Limpia el formulario para una nueva solicitud. |
-| `verHistorial()` | Activa panel de historial, oculta nav-bar. |
-| `volverDeHistorial()` | Regresa al paso actual, restaura nav-bar. |
-| `resetContador()` | Pide confirmación y resetea `fach_folio` a 0. |
-| `mostrarToast(msg)` | Muestra notificación flotante por 2.5s. |
-| `fmtN(n)` | Formatea número como pesos CL con puntos de miles. |
-| `fmtFecha(f)` | Convierte "YYYY-MM-DD" → "DD/MM/YYYY". |
-| `folioStr(n)` | Formatea número como 4 dígitos con ceros. |
-| `getFolio()` | Lee entero de localStorage "fach_folio". |
-| `setFolio(n)` | Guarda entero en localStorage "fach_folio". |
-| `saveLS()` | Serializa `solicitudes[]` en localStorage. |
+| `init()` | Punto de entrada: carga localStorage, muestra folio próximo, va al paso 1 |
+| `loadLS()` | Lee `fach_historial` de localStorage a `solicitudes[]` |
+| `mostrarFolio()` | Actualiza `.folio-badge` y `#folio-num` con el próximo folio |
+
+### Navegación wizard
+
+| Función | Descripción |
+|---|---|
+| `irPaso(n)` | Muestra el panel n, actualiza `.steps-bar`, gestiona firma al entrar/salir paso 3 |
+| `actualizarResumen()` | Puebla el resumen de datos e ítems en el paso 3 |
+| `validarPaso(n)` | Valida campos obligatorios del paso n antes de avanzar |
+
+### Persistencia y folios
+
+| Función | Descripción |
+|---|---|
+| `getFolio()` | Lee `fach_folio` del localStorage como entero |
+| `setFolio(n)` | Escribe `n` en `fach_folio` |
+| `saveLS()` | Serializa `solicitudes[]` a `fach_historial` — punto único de escritura |
+| `resetContador()` | Resetea folio a 0 y actualiza pantalla |
+| `folioStr(n)` | Formatea entero a string de 4 dígitos con ceros: `3` → `"0003"` |
+
+### Ítems
+
+| Función | Descripción |
+|---|---|
+| `agregarItem()` | Valida, empuja a `items[]`, re-renderiza y recalcula |
+| `eliminarItem(i)` | Elimina ítem en índice i, re-renderiza y recalcula |
+| `renderItems()` | Genera HTML de la lista de ítems en `#items-list` |
+| `calcSub(it)` | Retorna `cant × precioUnitario` de un ítem |
+| `calcTotals()` | Actualiza subtotal, IVA y total en pantalla |
+
+### Firma canvas
+
+| Función | Descripción |
+|---|---|
+| `initCanvas()` | Registra eventos touch+mouse en el canvas (con limpieza de listeners anterior) |
+| `ajustarCanvas()` | Dimensiona el canvas al tamaño real de `.sig-wrap` |
+| `capturarFirma()` | Captura el canvas a `sigDataURL` |
+| `restaurarFirma()` | Pinta `sigDataURL` en el canvas con dimensiones explícitas |
+| `limpiarFirma()` | Limpia el canvas y resetea `sigDataURL` a `''` |
+
+### Historial
+
+| Función | Descripción |
+|---|---|
+| `guardarHistorial()` | Construye objeto solicitud, lo persiste y avanza al paso 1 |
+| `verHistorial()` | Muestra `#panel-hist`, oculta wizard y nav-bar |
+| `renderHistorial()` | Genera tarjetas HTML de cada solicitud en `solicitudes[]` |
+| `cargarHistorial(i)` | Carga solicitud i en el formulario para edición |
+| `eliminarHistorial(i)` | Elimina solicitud i de `solicitudes[]` y guarda |
+| `volverDesdeHistorial()` | Oculta `#panel-hist`, restaura wizard y nav-bar |
+
+### PDF e impresión
+
+| Función | Descripción |
+|---|---|
+| `imprimirPDF()` | Puebla `#print-area` y llama `window.print()` tras 700 ms |
+
+### Utilidades de formato
+
+| Función | Retorno | Ejemplo |
+|---|---|---|
+| `fmtN(n)` | String CLP o `'—'` | `fmtN(15000)` → `'$ 15.000'` |
+| `fmtFecha(str)` | Fecha en español | `fmtFecha('2026-04-08')` → `'8 de abril de 2026'` |
+| `folioStr(n)` | Número 4 dígitos | `folioStr(3)` → `'0003'` |
+
+### UI helpers
+
+| Función | Descripción |
+|---|---|
+| `toast(msg)` | Muestra notificación flotante por 2.5 s |
+| `nuevo()` | Limpia todos los campos, resetea firma, va al paso 1 |
+| `limpiarCampos()` | Vacía todos los inputs del wizard (FIX-008) |
 
 ---
 
-## Variables Globales de Estado
-
-```javascript
-var pasoActual = 1;          // Paso actual del wizard (1|2|3)
-var items = [];              // Array de ítems en edición
-var editIndex = -1;          // Índice en solicitudes[] si editando historial (-1=nuevo)
-var solicitudes = [];        // Array de solicitudes guardadas (espejo del localStorage)
-var sigDataURL = '';         // DataURL de la firma capturada (persistencia en sesión)
-```
-
----
-
-## Paleta de Colores y CSS
-
-Todas las variables en `:root`:
+## 13. Paleta CSS y variables
 
 ```css
---azul:   #0d1f3c   /* Fondo principal / header */
---azul2:  #1a3a6e   /* Cards secundarias / botones */
---dorado: #c8a84b   /* Acentos / borders / totales */
---dorado2:#a07830   /* Hover/gradiente dorado */
---blanco: #ffffff   /* Fondo cards */
---gris:   #f4f6f9   /* Fondo inputs */
---borde:  #dde3ed   /* Borders suaves */
---verde:  #2ecc71   /* Step completado */
---rojo:   #e74c3c   /* Botón eliminar */
+:root {
+  --azul:    #003087;            /* Azul institucional FACH */
+  --dorado:  #C8A45A;            /* Dorado AGA */
+  --verde:   #1a7a3c;            /* Confirmación / éxito */
+  --rojo:    #c0392b;            /* Error / alerta */
+  --gris:    #f5f5f5;            /* Fondos de panel */
+  --texto:   #1a1a2e;            /* Texto principal */
+  --borde:   #d0d0d0;            /* Bordes de inputs y cards */
+  --sombra:  rgba(0,48,135,0.08);/* Sombras suaves */
+}
 ```
 
-**Layout:** Flex columna en `.app` con `height: 100dvh`. El área de contenido (`.steps-content`) ocupa el espacio restante con `flex:1;overflow:hidden`. Cada panel es `position:absolute;inset:0;overflow-y:auto`.
+### Escuadrillas disponibles
+
+| Valor | Etiqueta visible |
+|---|---|
+| `instalaciones` | Bandada Instalaciones |
+| `alimentacion` | Bandada Alimentación |
+| `transporte` | Bandada Transporte |
 
 ---
 
-## Limitaciones Conocidas
+## 14. Bugs documentados y estado de corrección
 
-| N° | Limitación | Impacto |
+### BUG-1 — `limpiarFirma()` limpia variable inerte
+
+- **Severidad:** 🔴 Funcional
+- **Síntoma:** La firma "borrada" reaparece al navegar fuera del paso 3 y volver. La función limpiaba `sigURL` (variable huérfana que nada lee) en lugar de `sigDataURL`.
+- **Línea afectada:** `sigURL = '';`
+- **Fix:** `sigDataURL = '';`
+- **Estado:** ✅ Corregido
+
+---
+
+### BUG-2 — `guardarHistorial()` usa try/catch inline en lugar de `saveLS()`
+
+- **Severidad:** 🟡 Deuda técnica
+- **Síntoma:** Inconsistencia de manejo de errores: `guardarHistorial()` tenía su propio try/catch mientras `eliminarHistorial()` usaba `saveLS()`. Si `saveLS()` cambia, `guardarHistorial()` quedaba desactualizado silenciosamente.
+- **Fix:** Reemplazar el bloque try/catch duplicado por una llamada directa a `saveLS()`.
+- **Estado:** ✅ Corregido
+
+---
+
+### BUG-3 — `classList.add('oculta')` sin clase CSS definida
+
+- **Severidad:** 🔴 Funcional
+- **Síntoma:** Al entrar al historial, `#nav-bar` permanece visible porque la clase `.oculta` no existía en el `<style>`. El usuario podía pulsar "Siguiente" mientras estaba en la vista historial, rompiendo el estado del wizard.
+- **Fix aplicado:** Se añadió al CSS: `.oculta { display: none !important; }`
+- **Estado:** ✅ Corregido
+
+---
+
+### BUG-4 — `initCanvas()` acumula event listeners en cada visita
+
+- **Severidad:** 🔴 Funcional
+- **Síntoma:** Cada vez que el usuario navegaba paso 2 → paso 3, se añadía un nuevo set de listeners al canvas sin eliminar los anteriores. Después de dos viajes, el trazo se dibujaba doble; después de tres, triple.
+- **Fix:** Introducir el guard `canvasIniciado` y llamar `removeEventListener` por cada evento antes de volver a añadirlo.
+- **Estado:** ✅ Corregido
+
+---
+
+### BUG-5 — `setTimeout(print, 200)` insuficiente para Samsung S25
+
+- **Severidad:** 🟠 Incumple requisito de arquitectura AGA
+- **Síntoma:** En el S25, el diálogo de impresión se abría antes de que `#print-area` estuviera completamente pintado, resultando en documento en blanco o parcialmente renderizado.
+- **Fix:** Cambiar `200` por `700` (mínimo definido por el stack AGA).
+- **Estado:** ✅ Corregido
+
+---
+
+### BUG-6 — `sigDataURL` no se persiste en el historial
+
+- **Severidad:** 🔴 Funcional
+- **Síntoma:** Al cargar una solicitud del historial, la sección de firma aparecía vacía porque `sigDataURL` nunca se incluía en el objeto `rec` al guardar.
+- **Fix guardar:** Añadir `sigDataURL: sigDataURL` al objeto `rec` en `guardarHistorial()`.
+- **Fix cargar:** En `cargarHistorial(i)`: `sigDataURL = solicitudes[i].sigDataURL || '';`
+- **Estado:** ✅ Corregido
+
+---
+
+### BUG-7 — `fmtN(n)` muestra `'—'` cuando el total es exactamente $0
+
+- **Severidad:** 🟡 Deuda técnica
+- **Síntoma:** Si todos los ítems tienen precio unitario $0 (caso válido en solicitudes sin valorizar), el total es `0` y se mostraba `—` en lugar de `$ 0`.
+- **Fix:** Cambiar condición `n > 0` por `n !== null && n !== undefined`.
+- **Estado:** ✅ Corregido
+
+---
+
+### Tabla resumen
+
+| # | Bug | Tipo | Estado |
+|---|---|---|---|
+| 1 | `limpiarFirma`: limpia `sigURL` en vez de `sigDataURL` | 🔴 Funcional | ✅ Corregido |
+| 2 | `guardarHistorial`: try/catch duplicado de `saveLS()` | 🟡 Deuda | ✅ Corregido |
+| 3 | `classList.add('oculta')` — clase no existe en CSS | 🔴 Funcional | ✅ Corregido |
+| 4 | `initCanvas` acumula listeners en cada visita al paso 3 | 🔴 Funcional | ✅ Corregido |
+| 5 | `setTimeout(print, 200)` — requisito mínimo es 700ms | 🟠 Requisito | ✅ Corregido |
+| 6 | `sigDataURL` no se guarda en el objeto historial | 🔴 Funcional | ✅ Corregido |
+| 7 | `fmtN`: `n > 0` muestra `'—'` para total $0 exacto | 🟡 Deuda | ✅ Corregido |
+
+---
+
+## 15. Flujo de desarrollo y despliegue
+
+### Etapas obligatorias (stack AGA) — NUNCA omitir ninguna
+
+```
+ETAPA 1 — DESARROLLAR en Mac
+  ├── Editar index.html con VS Code / cualquier editor de texto
+  ├── Probar en Chrome: DevTools → toggle device → Samsung Galaxy S
+  └── Probar en Safari: comportamiento WebKit (diferente a Chrome)
+
+ETAPA 2 — SUBIR a GitHub Pages
+  ├── git checkout -b fix/descripcion-del-cambio
+  ├── git add index.html
+  ├── git commit -m "fix: descripción clara"
+  ├── git push origin fix/descripcion-del-cambio
+  └── Esperar ~30s → verificar en:
+      https://vgarcesb-cpu.github.io/solicitud-adquisicion/
+
+ETAPA 3 — VALIDAR en Samsung S25 (juez definitivo)
+  ├── Abrir Chrome o Samsung Internet en el S25
+  ├── Navegar a la URL de GitHub Pages
+  ├── Probar TODOS los flujos tocando con los dedos (no con mouse)
+  ├── Probar firma con dedo y con lápiz táctil
+  ├── Probar impresión PDF real en una impresora
+  └── Probar rotación de pantalla en paso 3 (canvas debe reescalarse)
+```
+
+> **Regla de oro:** NUNCA asumir que algo funciona sin pasar las 3 etapas. El S25 es el árbitro final. Lo que funciona en Chrome Desktop puede fallar en el S25.
+
+### Gestión de branches
+
+```bash
+# Corrección de bug
+git checkout -b fix/nombre-del-bug
+git add index.html
+git commit -m "fix: descripción clara del problema corregido"
+git push origin fix/nombre-del-bug
+# Pull Request en GitHub: fix/... → main
+
+# Nueva funcionalidad
+git checkout -b feat/nombre-de-la-feature
+git add index.html
+git commit -m "feat: descripción de la funcionalidad"
+git push origin feat/nombre-de-la-feature
+```
+
+### Estructura de archivos del repositorio
+
+```
+solicitud-adquisicion/
+├── index.html          ← aplicación completa (archivo único)
+├── manifest.json       ← configuración PWA (nombre, íconos, colores)
+├── sw.js               ← service worker cache-first
+├── icono.png           ← ícono PWA 512×512 px
+└── README.md           ← este documento
+```
+
+---
+
+## 16. Limitaciones conocidas y mejoras futuras
+
+### Limitaciones actuales
+
+| Limitación | Impacto | Nota |
 |---|---|---|
-| 1 | Sin Service Worker → no es offline real al primer acceso | Requiere carga inicial con red |
-| 2 | localStorage (no IndexedDB) → sin transacciones, sin guards IDB | App simple; suficiente para ≤200 registros |
-| 3 | Firma solo captura la sesión actual (no persiste en historial) | Si se recarga antes de guardar, se pierde |
-| 4 | `window.print()` depende del diálogo del SO | En algunos Android abre "Vista previa" no PDF directo |
-| 5 | Sin validación obligatoria de campos | Puede guardarse con campos vacíos |
-| 6 | Sin sincronización con servidor | Solo local por dispositivo |
-| 7 | Sin autenticación | Cualquier usuario del dispositivo accede |
+| `localStorage` tiene límite de ~5 MB | Las firmas en base64 pesan ~50 KB c/u; ~100 solicitudes max | Migrar a IndexedDB en v2 |
+| Sin sincronización entre dispositivos | El historial es local al dispositivo y navegador | Roadmap: WD MyCloud + Google Drive |
+| Sin autenticación de usuario | Cualquiera con acceso a la URL puede usar la app | Cloudflare Zero Trust mitiga esto |
+| Variable `sigURL` huérfana aún presente | Confunde a futuros mantenedores | Eliminar en próxima refactorización |
+| Un solo tipo de escuadrilla por solicitud | No permite solicitudes multi-escuadrilla | Diseño intencional (una solicitud = una escuadrilla) |
+
+### Mejoras planificadas para v2
+
+1. **Migración de `localStorage` a IndexedDB** — mayor capacidad, guards obligatorios, transacciones atómicas
+2. **Sincronización WD MyCloud** — exportación automática por red WiFi local via REST API
+3. **Integración Google Drive** — respaldo en la nube con carpetas por año y mes
+4. **Variante PDF sin QR** — para destinatarios externos que reciben por WhatsApp
+5. **Exportación / importación JSON** — backup manual del historial completo
+6. **Generación de QR en PDF** — código QR que enlace a la solicitud digital
+7. **Escáner QR** — recuperación de solicitudes escaneando el PDF impreso (Html5-QRCode)
 
 ---
 
-## Próximas Mejoras Sugeridas
-
-1. **Service Worker** → cache-first para uso 100% offline desde segundo acceso
-2. **IndexedDB** → reemplazar localStorage con guards `!db`, null-checks y `onerror` (alineado con arquitectura AGA estándar)
-3. **Guardar firma en historial** → serializar `sigDataURL` en el objeto solicitud
-4. **Validación por paso** → alertar campos vacíos antes de avanzar (FIX-009)
-5. **Exportar JSON** → botón de backup/restore del historial completo
-6. **QR en PDF** → incrustar QR con folio para trazabilidad (QRCode.js vía CDN)
-7. **WhatsApp sharing** → compartir PDF por `wa.me` con URL del documento
-8. **manifest.json + icono externo** → completar estructura PWA instalable
-9. **Selector de Escuadrillas dinámico** → cargar desde JSON configurable
-10. **Modo oscuro** → ya preparado con CSS variables, solo agregar `prefers-color-scheme`
-
----
-
-*Documento generado automáticamente — AGA PWA Suite · Toti's®*
+*Documento técnico generado y mantenido por Toti's® — Sistemas AGA, FACH*
+*Última actualización: abril 2026 — v1.0.0 con 7 bugs corregidos*
