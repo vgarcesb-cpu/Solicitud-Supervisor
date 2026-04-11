@@ -1,6 +1,6 @@
 {
   "name": "Solicitud Adquisición AGA",
-  "short_name": "Solicitud AGA",
+  "short_name": "Sol.Supervisor",
   "description": "Sistema de Solicitudes de Adquisición de Materiales — Academia de Guerra Aérea, FACH",
   "id": "/Solicitud-Supervisor/",
   "start_url": "./index.html",
