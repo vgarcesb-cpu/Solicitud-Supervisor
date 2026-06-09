@@ -356,7 +356,7 @@ body { background: var(--azul); font-family: -apple-system, BlinkMacSystemFont, 
 var db;
 var pasoActual = 1;
 var items = [];
-var editIndex = -1;   // id string del registro en edición, null si es nuevo
+var editIndex = -1;   // -1 = nuevo registro; string = id del registro en edición
 var solicitudes = []; // espejo en memoria del store IDB
 var sigDataURL = '';
 
@@ -396,7 +396,9 @@ function cargarTodasSolicitudes(cb) {
   if (!db) { cb(); return; }
   var tx = db.transaction(STORE_SOL, 'readonly');
   tx.onerror = function(e) { alert('Error IDB: ' + e.target.error); };
-  tx.objectStore(STORE_SOL).getAll().onsuccess = function(e) {
+  var getAllReq = tx.objectStore(STORE_SOL).getAll();
+  getAllReq.onerror = function() { console.error('Error al leer solicitudes'); cb(); };
+  getAllReq.onsuccess = function(e) {
     solicitudes = e.target.result || [];
     // Ordenar por fecha de creación (más reciente primero)
     solicitudes.sort(function(a, b) { return (b.ts || 0) - (a.ts || 0); });
@@ -423,16 +425,6 @@ function setFolio(n, cb) {
   tx.oncomplete = function() { if (cb) cb(); };
 }
 
-// ── Guardar array completo de solicitudes en IDB ──
-function saveIDB(cb) {
-  if (!db) return alert('Base de datos no lista.');
-  var tx = db.transaction(STORE_SOL, 'readwrite');
-  tx.onerror = function(e) { alert('Error al guardar: ' + e.target.error); };
-  var store = tx.objectStore(STORE_SOL);
-  solicitudes.forEach(function(s) { store.put(s); });
-  tx.oncomplete = function() { if (cb) cb(); };
-}
-
 // ═══════════════════════════════════════════════════════
 // UTILIDADES
 // ═══════════════════════════════════════════════════════
@@ -440,7 +432,10 @@ function escHTML(str) {
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 function folioStr(n) { return String(n).padStart(4, '0'); }
-function fmtN(n) { return n > 0 ? Math.round(n).toLocaleString('es-CL') : '—'; }
+function fmtN(n) {
+  if (n <= 0) return '—';
+  try { return Math.round(n).toLocaleString('es-CL'); } catch(e) { return Math.round(n).toString(); }
+}
 function fmtFecha(f) {
   if (!f) return '';
   var p = f.split('-');
@@ -644,8 +639,9 @@ function restaurarFirma() {
   var sc = document.getElementById('sig-canvas');
   if (!sc || !sigDataURL) return;
   ajustarCanvas();
+  var w = sc.width, h = sc.height;
   var img = new Image();
-  img.onload = function() { sc.getContext('2d').drawImage(img, 0, 0, sc.width, sc.height); };
+  img.onload = function() { sc.getContext('2d').drawImage(img, 0, 0, w, h); };
   img.src = sigDataURL;
 }
 
@@ -715,8 +711,8 @@ function renderHistorial() {
         '<span class="hist-folio">' + h.id + '</span>' +
         '<span style="color:#888;font-size:11px">' + fmtFecha(h.fecha) + '</span>' +
       '</div>' +
-      '<div class="hist-det">' + h.escuadrilla + ' · ' + h.items.length + ' ítem(s) · Total: $' + Math.round(h.total).toLocaleString('es-CL') + '</div>' +
-      (h.observaciones ? '<div class="hist-obs">' + h.observaciones + '</div>' : '') +
+      '<div class="hist-det">' + escHTML(h.escuadrilla) + ' · ' + h.items.length + ' ítem(s) · Total: $' + Math.round(h.total).toLocaleString('es-CL') + '</div>' +
+      (h.observaciones ? '<div class="hist-obs">' + escHTML(h.observaciones) + '</div>' : '') +
       '<button class="btn-eliminar-hist" onclick="event.stopPropagation();eliminarHistorial(\'' + h.id + '\')">Eliminar</button>' +
     '</div>';
   }).join('');
