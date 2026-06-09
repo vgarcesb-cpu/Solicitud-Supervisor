@@ -136,12 +136,14 @@ body { background: var(--azul); font-family: -apple-system, BlinkMacSystemFont, 
 /* PRINT */
 #print-area { display: none; }
 @media print {
+  body { background: #fff !important; }
   body > .app, .toast { display: none !important; }
   #print-area {
     display: block !important;
     padding: 0;
     font-family: Arial, sans-serif;
     color: #000;
+    background: #fff !important;
   }
   @page { size: letter portrait; margin: 15mm 20mm; }
   table { border-collapse: collapse !important; }
