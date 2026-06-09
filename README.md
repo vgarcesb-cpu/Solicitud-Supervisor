@@ -900,5 +900,95 @@ solicitud-adquisicion/
 
 ---
 
+---
+
+## 17. Auditoría y correcciones — junio 2026
+
+### Contexto
+
+En junio de 2026 se realizó una auditoría completa del código fuente mediante análisis estático asistido por IA (Claude Code). Se identificaron 8 problemas de distintas categorías; 6 fueron corregidos en el mismo ciclo y mergeados a `main` (PR #3). Los 2 restantes se documentan como no aplicados por ser de bajo riesgo o intencionales por diseño.
+
+---
+
+### Correcciones aplicadas (PR #3)
+
+#### FIX-A — XSS en `renderHistorial()`
+
+- **Severidad:** 🟠 Baja (datos provienen de IDB local, no de red)
+- **Síntoma:** `h.escuadrilla` y `h.observaciones` se inyectaban directamente como innerHTML sin escapar. Si algún campo contenía caracteres HTML maliciosos ingresados previamente, se ejecutarían al renderizar el historial.
+- **Fix:** Envolver ambos campos en `escHTML()`, función ya existente en el código.
+- **Estado:** ✅ Corregido
+
+---
+
+#### FIX-B — Fallo silencioso en `cargarTodasSolicitudes()`
+
+- **Severidad:** 🟡 Baja
+- **Síntoma:** La llamada `.getAll()` sobre el objectStore de IDB no tenía manejador `.onerror`. Si la transacción fallaba, el callback `cb()` nunca se ejecutaba y la app quedaba colgada sin mensaje de error.
+- **Fix:** Asignar `.getAll()` a una variable `getAllReq` y agregar `getAllReq.onerror` que loguea el error y llama `cb()` para no bloquear el flujo.
+- **Estado:** ✅ Corregido
+
+---
+
+#### FIX-D — Función `saveIDB()` no utilizada (código muerto)
+
+- **Severidad:** ⚪ Trivial
+- **Síntoma:** La función `saveIDB()` fue definida durante el refactor a IndexedDB pero nunca se llamó. El guardado real se hace con `put()` inline dentro de `guardarHistorial()`. La función ocupaba espacio y confundía a futuros mantenedores.
+- **Fix:** Eliminar la función completa.
+- **Estado:** ✅ Corregido
+
+---
+
+#### FIX-F — `fmtN()` sin fallback de locale
+
+- **Severidad:** ⚪ Muy baja
+- **Síntoma:** `toLocaleString('es-CL')` lanzaba excepción silenciosa en entornos sin soporte del locale chileno, devolviendo formato incorrecto de moneda.
+- **Fix:** Envolver en `try/catch`; en caso de error retorna el número sin formato de locale.
+- **Estado:** ✅ Corregido
+
+---
+
+#### FIX-G — Race condition en `restaurarFirma()`
+
+- **Severidad:** 🟡 Baja (solo en edge cases de resize rápido)
+- **Síntoma:** `ajustarCanvas()` modificaba las dimensiones del canvas de forma sincrónica, pero `drawImage()` se ejecutaba en el callback `img.onload` (asíncrono). Si `ajustarCanvas()` volvía a ejecutarse entre medio (p.ej. por evento `resize`), la firma se dibujaba con dimensiones incorrectas y aparecía distorsionada.
+- **Fix:** Cachear `sc.width` y `sc.height` en variables locales `w` y `h` antes de crear la imagen, y usar esas variables dentro del callback.
+- **Estado:** ✅ Corregido
+
+---
+
+#### FIX-J — Comentario contradictorio en `editIndex`
+
+- **Severidad:** ⚪ Trivial (documentación)
+- **Síntoma:** El comentario decía `// id string del registro en edición, null si es nuevo` pero la variable se inicializa con `-1` (número) y el centinela de "nuevo" es `-1`, no `null`.
+- **Fix:** Comentario actualizado a `// -1 = nuevo registro; string = id del registro en edición`.
+- **Estado:** ✅ Corregido
+
+---
+
+### Problemas no corregidos (por diseño o riesgo aceptable)
+
+| # | Problema | Razón para no corregir |
+|---|----------|------------------------|
+| **C** | Guard `sc._siginit` en `initCanvas()` es débil (flag en lugar de `removeEventListener`) | FIX-004 ya resuelve el síntoma; refactor completo queda para v2 |
+| **E** | Callback nesting en el reset de folio post-guardado | Funciona correctamente; migración a Promises queda para v2 |
+
+---
+
+### Tabla resumen de la auditoría
+
+| ID | Categoría | Severidad | Estado |
+|----|-----------|-----------|--------|
+| A | XSS en historial | 🟠 Baja | ✅ Corregido |
+| B | Fallo silencioso IDB | 🟡 Baja | ✅ Corregido |
+| C | Guard de canvas débil | 🟡 Baja | ⏳ Pendiente v2 |
+| D | Código muerto `saveIDB()` | ⚪ Trivial | ✅ Corregido |
+| E | Callback nesting en folio reset | ⚪ Code smell | ⏳ Pendiente v2 |
+| F | Locale fallback en `fmtN()` | ⚪ Muy baja | ✅ Corregido |
+| G | Race condition en `restaurarFirma()` | 🟡 Baja | ✅ Corregido |
+| J | Comentario de `editIndex` incorrecto | ⚪ Trivial | ✅ Corregido |
+
+---
+
 *Documento técnico generado y mantenido por Toti's® — Sistemas AGA, FACH*
-*Última actualización: abril 2026 — v1.0.0 con 7 bugs corregidos*
+*Última actualización: junio 2026 — v1.0.0 con 13 correcciones acumuladas (7 previas + 6 auditoría junio 2026)*
