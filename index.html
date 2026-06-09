@@ -313,43 +313,42 @@ body { background: var(--azul); font-family: -apple-system, BlinkMacSystemFont, 
 
 <!-- PRINT AREA -->
 <div id="print-area">
-  <div style="text-align:center;margin-bottom:16px">
-    <div style="font-size:12px;font-weight:400;line-height:1.4">FUERZA AÉREA DE CHILE</div>
-    <div style="font-size:12px;font-weight:400;line-height:1.4">DIVISIÓN DE EDUCACIÓN</div>
-    <div style="font-size:12px;font-weight:400;line-height:1.4;text-decoration:underline">ACADEMIA DE GUERRA AÉREA</div>
+  <div style="text-align:center;width:fit-content;margin-bottom:16px">
+    <div style="font-size:12px;font-weight:400;line-height:1.1">FUERZA AÉREA DE CHILE</div>
+    <div style="font-size:12px;font-weight:400;line-height:1.1">DIVISIÓN DE EDUCACIÓN</div>
+    <div style="font-size:12px;font-weight:400;line-height:1.1;text-decoration:underline">ACADEMIA DE GUERRA AÉREA</div>
   </div>
-  <div style="text-align:center;font-size:13px;font-weight:700;text-decoration:underline;margin-bottom:14px">SOLICITUD DE ADQUISICIÓN DE MATERIALES</div>
+  <div style="text-align:center;font-size:12px;text-decoration:underline;margin-bottom:14px">SOLICITUD DE ADQUISICIÓN DE MATERIALES</div>
   <div style="display:flex;justify-content:space-between;margin-bottom:10px;font-size:12px">
     <span>Folio: <strong id="p-folio"></strong></span>
     <span>Fecha: <span id="p-fecha"></span></span>
   </div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;font-size:12px">
-    <div><div style="color:#666;font-size:10px">Escuadrilla Base Aérea</div><div id="p-escuadrilla" style="font-weight:600"></div></div>
-    <div><div style="color:#666;font-size:10px">Cdte. Escuadrilla Base Aérea</div><div id="p-cdte" style="font-weight:600"></div></div>
+    <div><div style="color:#666">Escuadrilla Base Aérea</div><div id="p-escuadrilla"></div></div>
+    <div><div style="color:#666">Cdte. Escuadrilla Base Aérea</div><div id="p-cdte"></div></div>
   </div>
   <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:10px">
     <thead>
       <tr>
-        <th style="border:1px solid #ccc;padding:5px 8px;text-align:left;font-weight:600;background:#f0f0f0">Cant.</th>
-        <th style="border:1px solid #ccc;padding:5px 8px;text-align:left;font-weight:600;background:#f0f0f0">Unidad</th>
-        <th style="border:1px solid #ccc;padding:5px 8px;text-align:left;font-weight:600;background:#f0f0f0">Descripción Material / Servicio</th>
-        <th style="border:1px solid #ccc;padding:5px 8px;text-align:right;font-weight:600;background:#f0f0f0">P. Unitario</th>
-        <th style="border:1px solid #ccc;padding:5px 8px;text-align:right;font-weight:600;background:#f0f0f0">Subtotal</th>
+        <th style="border:1px solid #ccc;padding:5px 8px;text-align:left;font-weight:400;background:#f0f0f0">Cant.</th>
+        <th style="border:1px solid #ccc;padding:5px 8px;text-align:left;font-weight:400;background:#f0f0f0">Unidad</th>
+        <th style="border:1px solid #ccc;padding:5px 8px;text-align:left;font-weight:400;background:#f0f0f0">Descripción Material / Servicio</th>
+        <th style="border:1px solid #ccc;padding:5px 8px;text-align:right;font-weight:400;background:#f0f0f0">P. Unitario</th>
+        <th style="border:1px solid #ccc;padding:5px 8px;text-align:right;font-weight:400;background:#f0f0f0">Subtotal</th>
       </tr>
     </thead>
     <tbody id="p-items"></tbody>
   </table>
   <div style="text-align:right;font-size:12px;margin-bottom:10px">
-    <div>Subtotal neto: $ <span id="p-sub"></span></div>
-    <div>IVA (19%): $ <span id="p-iva"></span></div>
-    <div style="font-weight:700;font-size:13px">TOTAL: $ <span id="p-total"></span></div>
+    <div>Subtotal neto: $<span id="p-sub"></span></div>
+    <div>IVA (19%): $<span id="p-iva"></span></div>
+    <div style="font-weight:700">TOTAL: $<span id="p-total"></span></div>
   </div>
-  <div style="font-size:12px;margin-bottom:20px"><span style="color:#666">Observaciones: </span><span id="p-obs"></span></div>
+  <div style="font-size:12px;margin-bottom:16px"><span style="color:#666">Observaciones: </span><span id="p-obs"></span></div>
   <div style="text-align:center;margin-top:40px;font-size:12px">
     <div style="display:flex;flex-direction:column;align-items:center">
-      <img id="p-sig-img" src="" style="display:none;max-width:200px;height:60px;object-fit:contain;margin-bottom:4px">
-      <div style="width:200px;border-top:1px solid #000;margin-bottom:4px"></div>
-      <div id="p-firma-nombre" style="font-weight:700"></div>
+      <img id="p-sig-img" src="" style="display:none;max-width:180px;height:55px;object-fit:contain;margin-bottom:2px">
+      <div id="p-firma-nombre" style="font-weight:400"></div>
       <div id="p-firma-grado" style="color:#333"></div>
       <div id="p-firma-cargo" style="color:#333"></div>
     </div>
