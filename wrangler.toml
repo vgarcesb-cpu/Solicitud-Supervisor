@@ -1,0 +1,8 @@
+name = "solicitud-supervisor-worker"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "solicitud-supervisor-db"
+database_id = "CONFIGURAR-EN-CLOUDFLARE"
