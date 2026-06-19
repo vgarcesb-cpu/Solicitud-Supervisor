@@ -274,6 +274,19 @@ body { font-family: "Segoe UI", Arial, sans-serif; font-size: 14px; background: 
         <button class="btn-agregar-hist" onclick="guardarApiUrl()">Guardar y probar conexión</button>
         <div id="ss-sync-status" style="font-size:12px;margin-top:8px;color:#888"></div>
       </div>
+      <div class="card" id="card-migracion-temporal" style="border:2px dashed #c8a84b">
+        <div class="card-title">🔄 Migración de historial (TEMPORAL — quitar después)</div>
+        <p style="font-size:11px;color:#888;margin-bottom:8px">
+          Exporta aquí en el origen viejo, luego importa en el origen nuevo.
+        </p>
+        <button class="btn-agregar-hist" onclick="exportarHistorialJSON()">⬇️ Exportar historial (.json)</button>
+        <div style="margin-top:8px">
+          <label class="campo-label">Importar archivo .json</label>
+          <input type="file" id="ss-import-file" accept="application/json" style="width:100%;padding:8px;border:1px solid var(--borde);border-radius:8px;font-size:12px">
+        </div>
+        <button class="btn-agregar-hist" onclick="importarHistorialJSON()" style="margin-top:8px">⬆️ Importar historial</button>
+        <div id="ss-migracion-status" style="font-size:12px;margin-top:8px;color:#888"></div>
+      </div>
     </div>
 
   </div>
@@ -286,15 +299,9 @@ body { font-family: "Segoe UI", Arial, sans-serif; font-size: 14px; background: 
         <label class="campo-label">N° Folio (ej: ADQ-2024-0012)</label>
         <input class="campo-input" id="mh-folio" type="text" maxlength="30" placeholder="ADQ-AAAA-NNNN">
       </div>
-      <div class="campo-row">
-        <div class="campo-group">
-          <label class="campo-label">Fecha</label>
-          <input class="campo-input" id="mh-fecha" type="date">
-        </div>
-        <div class="campo-group">
-          <label class="campo-label">Total ($)</label>
-          <input class="campo-input" id="mh-total" type="text" inputmode="numeric" maxlength="15" placeholder="0">
-        </div>
+      <div class="campo-group">
+        <label class="campo-label">Fecha</label>
+        <input class="campo-input" id="mh-fecha" type="date">
       </div>
       <div class="campo-group">
         <label class="campo-label">Escuadrilla</label>
@@ -309,9 +316,20 @@ body { font-family: "Segoe UI", Arial, sans-serif; font-size: 14px; background: 
         <input class="campo-input" id="mh-cdte" type="text" maxlength="80" placeholder="Nombre del Comandante">
       </div>
       <div class="campo-group">
-        <label class="campo-label">Descripción / Observaciones</label>
-        <textarea class="campo-input" id="mh-obs" rows="2" maxlength="300" placeholder="Descripción general de la solicitud..."></textarea>
+        <label class="campo-label">Observaciones</label>
+        <textarea class="campo-input" id="mh-obs" rows="2" maxlength="300" placeholder="Notas adicionales..."></textarea>
       </div>
+
+      <div class="card-title" style="margin-top:12px">📦 Ítems</div>
+      <div id="mh-items-container"></div>
+      <button class="btn-agregar" onclick="agregarItemHistorico()">+ Agregar ítem</button>
+
+      <div class="totales-box" style="margin-top:10px">
+        <div class="tot-row"><span>Subtotal neto</span><span>$ <span id="mh-tot-sub">—</span></span></div>
+        <div class="tot-row"><span>IVA (19%)</span><span>$ <span id="mh-tot-iva">—</span></span></div>
+        <div class="tot-row total"><span>TOTAL</span><span>$ <span id="mh-tot-total">—</span></span></div>
+      </div>
+
       <button class="btn-modal-guardar" onclick="guardarHistorico()">💾 Guardar en historial</button>
       <button class="btn-modal-cancelar" onclick="cerrarModalHistorico()">Cancelar</button>
     </div>
@@ -479,6 +497,54 @@ function actualizarEstadoSyncUI() {
   } else {
     st.innerHTML = '<span style="color:#2ecc71">✓ Todo respaldado</span>';
   }
+}
+
+// ═══════════════════════════════════════════════════════
+// MIGRACIÓN TEMPORAL — exportar/importar historial entre orígenes
+// (file:// → totis.cl). Quitar este bloque y la card del HTML
+// una vez completada la migración.
+// ═══════════════════════════════════════════════════════
+function exportarHistorialJSON() {
+  var st = document.getElementById('ss-migracion-status');
+  try {
+    var raw = localStorage.getItem('fach_historial') || '[]';
+    var blob = new Blob([raw], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'fach_historial_backup.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    if (st) st.innerHTML = '<span style="color:#2ecc71">✓ Descargado fach_historial_backup.json</span>';
+  } catch(e) {
+    if (st) st.innerHTML = '<span style="color:#e74c3c">✗ Error al exportar: ' + e.message + '</span>';
+  }
+}
+
+function importarHistorialJSON() {
+  var st = document.getElementById('ss-migracion-status');
+  var fileInput = document.getElementById('ss-import-file');
+  var file = fileInput && fileInput.files[0];
+  if (!file) { if(st) st.innerHTML = '<span style="color:#e74c3c">Selecciona un archivo .json primero</span>'; return; }
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var datos = JSON.parse(e.target.result);
+      if (!Array.isArray(datos)) throw new Error('El archivo no contiene un historial válido');
+      solicitudes = datos;
+      saveLS();
+      renderHistorial();
+      if (st) st.innerHTML = '<span style="color:#2ecc71">✓ Importados ' + datos.length + ' registro(s)</span>';
+    } catch(err) {
+      if (st) st.innerHTML = '<span style="color:#e74c3c">✗ Error al importar: ' + err.message + '</span>';
+    }
+  };
+  reader.onerror = function() {
+    if (st) st.innerHTML = '<span style="color:#e74c3c">✗ No se pudo leer el archivo</span>';
+  };
+  reader.readAsText(file);
 }
 
 function getFolioContador() { try { return parseInt(localStorage.getItem('fach_folio')||'0'); } catch(e) { return 0; } }
@@ -759,10 +825,13 @@ function cargarHistorial(i) {
   if (h.esHistorico) {
     document.getElementById('mh-folio').value = h.folioCustom || ('ADQ-'+h.folioAnio+'-'+h.folioNum);
     document.getElementById('mh-fecha').value = h.fecha;
-    document.getElementById('mh-total').value = Math.round(h.total).toString();
     document.getElementById('mh-escuadrilla').value = h.escuadrilla;
     document.getElementById('mh-cdte').value = h.cdte || '';
     document.getElementById('mh-obs').value = h.observaciones || '';
+    itemsHistorico = (h.items && h.items.length > 0)
+      ? h.items.map(function(it){ return Object.assign({}, it); })
+      : [{ cant: 1, unidad: 'UN', descripcion: '', pUnitario: 0 }];
+    renderItemsHistorico();
     // Reutilizar guardarHistorico para editar: marcamos editIndex
     editIndex = i;
     document.getElementById('modal-historico').classList.add('activo');
@@ -912,15 +981,80 @@ function capturarFirma() {
   return temp.toDataURL('image/jpeg', 0.7);
 }
 
-// ── REGISTRO HISTÓRICO ──
+// ── REGISTRO HISTÓRICO (con ítems propios, independiente de items del Paso 2) ──
+var itemsHistorico = [];
+
+function agregarItemHistorico() {
+  itemsHistorico.push({ cant: 1, unidad: 'UN', descripcion: '', pUnitario: 0 });
+  renderItemsHistorico();
+}
+
+function eliminarItemHistorico(i) {
+  if (itemsHistorico.length > 1) { itemsHistorico.splice(i, 1); renderItemsHistorico(); }
+}
+
+function updItemHistoricoText(i, k, v) {
+  itemsHistorico[i][k] = v;
+}
+
+function updItemHistorico(i, k, v) {
+  if (k === 'pUnitario') {
+    itemsHistorico[i][k] = parseFloat(String(v).replace(/\./g,'').replace(',','.')) || 0;
+  } else if (k === 'cant') {
+    itemsHistorico[i][k] = parseFloat(v) || 0;
+  } else {
+    itemsHistorico[i][k] = v;
+  }
+  renderItemsHistorico();
+}
+
+function calcTotalsHistorico() {
+  var sub = itemsHistorico.reduce(function(a,it){ return a + calcSub(it); }, 0);
+  return { sub: sub, iva: sub*0.19, total: sub*1.19 };
+}
+
+function renderItemsHistorico() {
+  var t = calcTotalsHistorico();
+  var cont = document.getElementById('mh-items-container');
+  cont.innerHTML = itemsHistorico.map(function(it, i) {
+    var sub = calcSub(it);
+    return '<div class="item-card">' +
+      '<div class="item-num">Ítem ' + (i+1) + '</div>' +
+      (itemsHistorico.length > 1 ? '<button class="btn-eliminar-item" onclick="eliminarItemHistorico('+i+')">×</button>' : '') +
+      '<div class="item-fila3">' +
+        '<div><label class="campo-label" style="font-size:10px">Cant.</label>' +
+        '<input class="campo-input" style="padding:8px" type="number" min="1" value="'+it.cant+'" onchange="updItemHistorico('+i+',\'cant\',this.value)"></div>' +
+        '<div><label class="campo-label" style="font-size:10px">Unidad</label>' +
+        '<input class="campo-input" style="padding:8px;text-transform:uppercase" list="dl-unidad-mh-'+i+'" maxlength="10" value="'+escHTML(it.unidad)+'" oninput="updItemHistoricoText('+i+',\'unidad\',this.value.toUpperCase())" placeholder="UN">' +
+        '<datalist id="dl-unidad-mh-'+i+'"><option value="UN"><option value="KG"><option value="MT"><option value="LT"><option value="CJ"><option value="PAQ"><option value="GL"><option value="M2"><option value="HR"><option value="DIA"></datalist>' +
+        '</div>' +
+        '<div><label class="campo-label" style="font-size:10px">Descripción</label>' +
+        '<input class="campo-input" style="padding:8px" type="text" maxlength="150" placeholder="Descripción material/servicio" value="'+escHTML(it.descripcion)+'" oninput="updItemHistoricoText('+i+',\'descripcion\',this.value)"></div>' +
+      '</div>' +
+      '<div class="item-precio">' +
+        '<div><label class="campo-label" style="font-size:10px">P. Unitario</label>' +
+        '<div style="display:flex;align-items:center;gap:4px"><span style="font-weight:700;color:var(--azul2)">$</span>' +
+        '<input class="campo-input" style="padding:8px" type="text" inputmode="numeric" value="'+(it.pUnitario>0?Math.round(it.pUnitario).toLocaleString('es-CL'):'')+'" placeholder="0" onchange="updItemHistorico('+i+',\'pUnitario\',this.value)"></div></div>' +
+        '<div><label class="campo-label" style="font-size:10px">Subtotal</label>' +
+        '<div class="subtotal-item">$ '+(sub>0?Math.round(sub).toLocaleString('es-CL'):'—')+'</div></div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  document.getElementById('mh-tot-sub').textContent = fmtN(t.sub);
+  document.getElementById('mh-tot-iva').textContent = fmtN(t.iva);
+  document.getElementById('mh-tot-total').textContent = fmtN(t.total);
+}
+
 function abrirModalHistorico() {
   // Precargar fecha de hoy
   document.getElementById('mh-fecha').value = new Date().toISOString().slice(0,10);
   document.getElementById('mh-folio').value = '';
-  document.getElementById('mh-total').value = '';
   document.getElementById('mh-cdte').value = '';
   document.getElementById('mh-obs').value = '';
   document.getElementById('mh-escuadrilla').value = 'Bandada Instalaciones';
+  itemsHistorico = [];
+  agregarItemHistorico();
   document.getElementById('modal-historico').classList.add('activo');
 }
 
@@ -932,14 +1066,17 @@ function cerrarModalHistorico() {
 function guardarHistorico() {
   var folio = document.getElementById('mh-folio').value.trim();
   var fecha = document.getElementById('mh-fecha').value;
-  var totalRaw = document.getElementById('mh-total').value.replace(/\./g,'').replace(',','.').trim();
-  var total = parseFloat(totalRaw) || 0;
   var esc = document.getElementById('mh-escuadrilla').value;
   var cdte = document.getElementById('mh-cdte').value.trim();
   var obs = document.getElementById('mh-obs').value.trim();
 
   if (!folio) { mostrarToast('⚠ Ingresa el N° de folio'); return; }
   if (!fecha) { mostrarToast('⚠ Ingresa la fecha'); return; }
+
+  var itemsValidos = itemsHistorico.filter(function(it){ return it.descripcion && it.descripcion.trim() !== ''; });
+  if (itemsValidos.length === 0) { mostrarToast('⚠ Agrega al menos un ítem con descripción'); return; }
+
+  var t = calcTotalsHistorico();
 
   var anio = new Date().getFullYear().toString();
   var num = '0000';
@@ -950,7 +1087,8 @@ function guardarHistorico() {
     id: folio, folioAnio: anio, folioNum: num, folioCustom: folio,
     fecha: fecha, escuadrilla: esc, cdte: cdte, observaciones: obs,
     firmaNombre: '', firmaGrado: '', firmaCargo: '', firmaImg: '',
-    items: [], total: total, esHistorico: true
+    items: itemsValidos.map(function(it){ return Object.assign({}, it); }),
+    total: t.total, esHistorico: true
   };
 
   if (editIndex >= 0) {
