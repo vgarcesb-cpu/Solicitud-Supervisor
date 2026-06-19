@@ -277,6 +277,8 @@ body { font-family: "Segoe UI", Arial, sans-serif; font-size: 14px; background: 
         </div>
         <button class="btn-agregar-hist" onclick="guardarApiUrl()">Guardar y probar conexión</button>
         <div id="ss-sync-status" style="font-size:12px;margin-top:8px;color:#888"></div>
+        <button class="btn-agregar-hist" onclick="traerRespaldoNube()" style="margin-top:8px">⬇️ Traer respaldo desde la nube</button>
+        <div id="ss-pull-status" style="font-size:12px;margin-top:8px;color:#888"></div>
       </div>
     </div>
 
@@ -404,7 +406,8 @@ function saveLS() { try { localStorage.setItem('fach_historial', JSON.stringify(
 // La app sigue funcionando 100% offline. Esto solo intenta
 // enviar/recibir cuando hay señal, sin bloquear al usuario.
 // ═══════════════════════════════════════════════════════
-var API_URL = (function(){ try { return localStorage.getItem('ss_api_url') || ''; } catch(e){ return ''; } })();
+var API_URL_DEFAULT = 'https://solicitud-supervisor-worker.vgarcesb.workers.dev';
+var API_URL = (function(){ try { return localStorage.getItem('ss_api_url') || API_URL_DEFAULT; } catch(e){ return API_URL_DEFAULT; } })();
 
 function marcarPendienteSync(folioId) {
   try {
@@ -427,8 +430,12 @@ function listaPendientesSync() {
 }
 
 // Intenta sincronizar un registro puntual al Worker. Silencioso si falla.
+function urlSyncConfirmada() {
+  try { return !!localStorage.getItem('ss_api_url'); } catch(e) { return false; }
+}
+
 function intentarSyncRegistro(rec) {
-  if (!API_URL || !navigator.onLine) { marcarPendienteSync(rec.id); return; }
+  if (!urlSyncConfirmada() || !navigator.onLine) { marcarPendienteSync(rec.id); return; }
   fetch(API_URL + '/solicitudes', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -446,7 +453,7 @@ function intentarSyncRegistro(rec) {
 
 // Recorre pendientes y reintenta. Se llama al recuperar señal.
 function reintentarSyncPendientes() {
-  if (!API_URL || !navigator.onLine) return;
+  if (!urlSyncConfirmada() || !navigator.onLine) return;
   var pend = listaPendientesSync();
   pend.forEach(function(folioId){
     var rec = solicitudes.find(function(s){ return s.id === folioId; });
@@ -476,13 +483,48 @@ function guardarApiUrl() {
   });
 }
 
+// Trae el respaldo completo desde D1 y lo fusiona con el historial local,
+// sin duplicar (por folio_id). Útil en un dispositivo nuevo (ej. S25)
+// para recuperar lo que ya se guardó desde otro dispositivo (ej. Mac).
+function traerRespaldoNube() {
+  var st = document.getElementById('ss-pull-status');
+  if (!urlSyncConfirmada()) {
+    if (st) st.innerHTML = '<span style="color:#e74c3c">Primero guarda y prueba la conexión arriba</span>';
+    return;
+  }
+  if (st) st.textContent = 'Descargando respaldo...';
+  fetch(API_URL + '/solicitudes').then(function(r){ return r.json(); }).then(function(resp){
+    if (!resp || !resp.ok || !Array.isArray(resp.data)) throw new Error('Respuesta inválida del Worker');
+    var traidos = 0, actualizados = 0;
+    resp.data.forEach(function(r){
+      var rec = {
+        id: r.folio_id, folioAnio: r.folio_anio, folioNum: r.folio_num, folioCustom: r.folio_custom || null,
+        fecha: r.fecha, escuadrilla: r.escuadrilla, cdte: r.cdte, observaciones: r.observaciones,
+        firmaNombre: r.firma_nombre, firmaGrado: r.firma_grado, firmaCargo: r.firma_cargo, firmaImg: r.firma_img,
+        items: r.items || [], total: r.total, esHistorico: !!r.es_historico
+      };
+      var idx = solicitudes.findIndex(function(s){ return s.id === rec.id; });
+      if (idx >= 0) { solicitudes[idx] = rec; actualizados++; }
+      else { solicitudes.push(rec); traidos++; }
+    });
+    saveLS();
+    sincronizarFolioContador();
+    renderHistorial();
+    if (st) st.innerHTML = '<span style="color:#2ecc71">✓ ' + traidos + ' nuevo(s), ' + actualizados + ' actualizado(s)</span>';
+  }).catch(function(e){
+    if (st) st.innerHTML = '<span style="color:#e74c3c">✗ Error: ' + escHTML(e.message) + '</span>';
+  });
+}
+
 function actualizarEstadoSyncUI() {
   var el = document.getElementById('ss-api-url');
   if (el && API_URL) el.value = API_URL;
   var st = document.getElementById('ss-sync-status');
   if (!st) return;
   var pend = listaPendientesSync().length;
-  if (!API_URL) { st.textContent = 'Sin respaldo configurado (la app sigue funcionando offline normalmente).'; return; }
+  var urlConfirmada = false;
+  try { urlConfirmada = !!localStorage.getItem('ss_api_url'); } catch(e) {}
+  if (!urlConfirmada) { st.textContent = 'URL precargada — presiona "Guardar y probar conexión" para activar el respaldo.'; return; }
   if (pend > 0) {
     st.innerHTML = '<span style="color:#c8a84b">⏳ ' + pend + ' solicitud(es) pendiente(s) de respaldo</span>';
   } else {
@@ -825,7 +867,7 @@ function eliminarHistorial(i) {
   var folioId = solicitudes[i] ? solicitudes[i].id : null;
   solicitudes.splice(i, 1);
   saveLS();
-  if (folioId && API_URL && navigator.onLine) {
+  if (folioId && urlSyncConfirmada() && navigator.onLine) {
     fetch(API_URL + '/solicitudes/' + encodeURIComponent(folioId), { method: 'DELETE' }).catch(function(){});
   }
   renderHistorial();
