@@ -262,6 +262,8 @@ body { font-family: "Segoe UI", Arial, sans-serif; font-size: 14px; background: 
       <div class="card">
         <div class="card-title">📁 Historial de Solicitudes</div>
         <button class="btn-agregar-hist" onclick="abrirModalHistorico()">+ Agregar Registro Antiguo</button>
+        <button class="btn-agregar-hist" onclick="sincronizarFolioContador()" style="margin-top:6px">🔄 Sincronizar próximo folio</button>
+        <div id="ss-sync-folio-status" style="font-size:12px;margin-top:6px;color:#888"></div>
         <div id="hist-lista"></div>
       </div>
       <div class="card">
@@ -562,6 +564,27 @@ function actualizarDisplayFolio() {
 }
 function fmtN(n) { return n > 0 ? Math.round(n).toLocaleString('es-CL') : '—'; }
 function fmtFecha(f) { if(!f) return ''; var p=f.split('-'); return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:f; }
+
+// Recalcula el contador de folio según el número más alto entre TODOS
+// los registros guardados (normales + históricos) del año actual.
+// Así el próximo folio automático nunca repite uno ya usado.
+function sincronizarFolioContador() {
+  var anioActual = new Date().getFullYear().toString();
+  var maxNum = getFolioContador();
+  solicitudes.forEach(function(s) {
+    if (s.folioAnio === anioActual) {
+      var n = parseInt(s.folioNum) || 0;
+      if (n > maxNum) maxNum = n;
+    }
+  });
+  setFolioContador(maxNum);
+  folioNumActual = maxNum + 1;
+  folioAnioActual = parseInt(anioActual);
+  actualizarDisplayFolio();
+  var st = document.getElementById('ss-sync-folio-status');
+  if (st) st.innerHTML = '<span style="color:#2ecc71">✓ Próximo folio: ADQ-' + anioActual + '-' + folioStr(maxNum + 1) + '</span>';
+}
+
 
 // ── INICIO ──
 function init() {
@@ -1102,6 +1125,7 @@ function guardarHistorico() {
     mostrarToast('✓ Registro histórico guardado');
   }
   saveLS();
+  sincronizarFolioContador();
   intentarSyncRegistro(rec);
   cerrarModalHistorico();
   renderHistorial();
