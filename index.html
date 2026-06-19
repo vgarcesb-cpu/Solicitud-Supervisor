@@ -278,19 +278,6 @@ body { font-family: "Segoe UI", Arial, sans-serif; font-size: 14px; background: 
         <button class="btn-agregar-hist" onclick="guardarApiUrl()">Guardar y probar conexión</button>
         <div id="ss-sync-status" style="font-size:12px;margin-top:8px;color:#888"></div>
       </div>
-      <div class="card" id="card-migracion-temporal" style="border:2px dashed #c8a84b">
-        <div class="card-title">🔄 Migración de historial (TEMPORAL — quitar después)</div>
-        <p style="font-size:11px;color:#888;margin-bottom:8px">
-          Exporta aquí en el origen viejo, luego importa en el origen nuevo.
-        </p>
-        <button class="btn-agregar-hist" onclick="exportarHistorialJSON()">⬇️ Exportar historial (.json)</button>
-        <div style="margin-top:8px">
-          <label class="campo-label">Importar archivo .json</label>
-          <input type="file" id="ss-import-file" accept="application/json" style="width:100%;padding:8px;border:1px solid var(--borde);border-radius:8px;font-size:12px">
-        </div>
-        <button class="btn-agregar-hist" onclick="importarHistorialJSON()" style="margin-top:8px">⬆️ Importar historial</button>
-        <div id="ss-migracion-status" style="font-size:12px;margin-top:8px;color:#888"></div>
-      </div>
     </div>
 
   </div>
@@ -501,54 +488,6 @@ function actualizarEstadoSyncUI() {
   } else {
     st.innerHTML = '<span style="color:#2ecc71">✓ Todo respaldado</span>';
   }
-}
-
-// ═══════════════════════════════════════════════════════
-// MIGRACIÓN TEMPORAL — exportar/importar historial entre orígenes
-// (file:// → totis.cl). Quitar este bloque y la card del HTML
-// una vez completada la migración.
-// ═══════════════════════════════════════════════════════
-function exportarHistorialJSON() {
-  var st = document.getElementById('ss-migracion-status');
-  try {
-    var raw = localStorage.getItem('fach_historial') || '[]';
-    var blob = new Blob([raw], { type: 'application/json' });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    a.href = url;
-    a.download = 'fach_historial_backup.json';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    if (st) st.innerHTML = '<span style="color:#2ecc71">✓ Descargado fach_historial_backup.json</span>';
-  } catch(e) {
-    if (st) st.innerHTML = '<span style="color:#e74c3c">✗ Error al exportar: ' + e.message + '</span>';
-  }
-}
-
-function importarHistorialJSON() {
-  var st = document.getElementById('ss-migracion-status');
-  var fileInput = document.getElementById('ss-import-file');
-  var file = fileInput && fileInput.files[0];
-  if (!file) { if(st) st.innerHTML = '<span style="color:#e74c3c">Selecciona un archivo .json primero</span>'; return; }
-  var reader = new FileReader();
-  reader.onload = function(e) {
-    try {
-      var datos = JSON.parse(e.target.result);
-      if (!Array.isArray(datos)) throw new Error('El archivo no contiene un historial válido');
-      solicitudes = datos;
-      saveLS();
-      renderHistorial();
-      if (st) st.innerHTML = '<span style="color:#2ecc71">✓ Importados ' + datos.length + ' registro(s)</span>';
-    } catch(err) {
-      if (st) st.innerHTML = '<span style="color:#e74c3c">✗ Error al importar: ' + err.message + '</span>';
-    }
-  };
-  reader.onerror = function() {
-    if (st) st.innerHTML = '<span style="color:#e74c3c">✗ No se pudo leer el archivo</span>';
-  };
-  reader.readAsText(file);
 }
 
 function getFolioContador() { try { return parseInt(localStorage.getItem('fach_folio')||'0'); } catch(e) { return 0; } }
