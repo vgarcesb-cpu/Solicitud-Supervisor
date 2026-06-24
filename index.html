@@ -774,6 +774,7 @@ function guardarHistorial() {
   var sigSnap = capturarFirma();
 
   var rec = {
+    id: folioCompleto(),
     folioAnio: String(folioAnioActual),
     folioNum: folioStr(folioNumActual),
     fecha: fecha,
@@ -784,6 +785,7 @@ function guardarHistorial() {
   };
 
   if (editIndex >= 0) {
+    rec.id = solicitudes[editIndex].id || rec.id;
     solicitudes[editIndex] = rec;
   } else {
     solicitudes.push(rec);
