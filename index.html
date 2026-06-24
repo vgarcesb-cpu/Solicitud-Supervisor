@@ -830,23 +830,6 @@ function guardarHistorial() {
 function cargarHistorial(i) {
   var h = solicitudes[i];
 
-  // Si es registro histórico (sin ítems detallados), mostrar modal de edición
-  if (h.esHistorico) {
-    document.getElementById('mh-folio').value = h.folioCustom || ('ADQ-'+h.folioAnio+'-'+h.folioNum);
-    document.getElementById('mh-fecha').value = h.fecha;
-    document.getElementById('mh-escuadrilla').value = h.escuadrilla;
-    document.getElementById('mh-cdte').value = h.cdte || '';
-    document.getElementById('mh-obs').value = h.observaciones || '';
-    itemsHistorico = (h.items && h.items.length > 0)
-      ? h.items.map(function(it){ return Object.assign({}, it); })
-      : [{ cant: 1, unidad: 'UN', descripcion: '', pUnitario: 0 }];
-    renderItemsHistorico();
-    // Reutilizar guardarHistorico para editar: marcamos editIndex
-    editIndex = i;
-    document.getElementById('modal-historico').classList.add('activo');
-    return;
-  }
-
   editIndex = i;
   // Restaurar folio del historial al estado interno
   folioAnioActual = parseInt(h.folioAnio) || new Date().getFullYear();
