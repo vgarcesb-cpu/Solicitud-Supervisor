@@ -544,6 +544,16 @@ function actualizarDisplayFolio() {
   if (el) el.textContent = fc;
   var fs = document.getElementById('folio-show');
   if (fs) fs.textContent = fc;
+  actualizarSyncDot();
+}
+function actualizarSyncDot() {
+  var dot = document.getElementById('sync-dot');
+  if (!dot) return;
+  var urlConfirmada = false;
+  try { urlConfirmada = !!localStorage.getItem('ss_api_url'); } catch(e) {}
+  if (!urlConfirmada) { dot.style.background = '#888'; return; }
+  var pend = listaPendientesSync().length;
+  dot.style.background = pend > 0 ? '#c8a84b' : '#2ecc71';
 }
 function fmtN(n) { return n > 0 ? Math.round(n).toLocaleString('es-CL') : '—'; }
 function fmtFecha(f) { if(!f) return ''; var p=f.split('-'); return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:f; }
