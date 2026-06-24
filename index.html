@@ -215,6 +215,20 @@ body { font-family: "Segoe UI", Arial, sans-serif; font-size: 14px; background: 
           <textarea class="campo-input" id="observaciones" rows="2" maxlength="300" placeholder="Notas adicionales para la jefatura..."></textarea>
         </div>
       </div>
+      <div class="card">
+        <div class="card-title">☁️ Respaldo en la nube (opcional)</div>
+        <p style="font-size:11px;color:#888;margin-bottom:8px">
+          La app funciona 100% sin internet. Si configuras la URL del Worker, se respaldará automáticamente cuando haya señal.
+        </p>
+        <div class="campo-group">
+          <label class="campo-label">URL del Worker</label>
+          <input class="campo-input" id="ss-api-url" type="text" placeholder="https://solicitud-supervisor-worker.vgarcesb.workers.dev">
+        </div>
+        <button class="btn-agregar-hist" onclick="guardarApiUrl()">Guardar y probar conexión</button>
+        <div id="ss-sync-status" style="font-size:12px;margin-top:8px;color:#888"></div>
+        <button class="btn-agregar-hist" onclick="traerRespaldoNube()" style="margin-top:8px">⬇️ Traer respaldo desde la nube</button>
+        <div id="ss-pull-status" style="font-size:12px;margin-top:8px;color:#888"></div>
+      </div>
     </div>
 
     <!-- PASO 2: MATERIALES -->
@@ -266,20 +280,7 @@ body { font-family: "Segoe UI", Arial, sans-serif; font-size: 14px; background: 
         <div id="ss-sync-folio-status" style="font-size:12px;margin-top:6px;color:#888"></div>
         <div id="hist-lista"></div>
       </div>
-      <div class="card">
-        <div class="card-title">☁️ Respaldo en la nube (opcional)</div>
-        <p style="font-size:11px;color:#888;margin-bottom:8px">
-          La app funciona 100% sin internet. Si configuras la URL del Worker, se respaldará automáticamente cuando haya señal.
-        </p>
-        <div class="campo-group">
-          <label class="campo-label">URL del Worker</label>
-          <input class="campo-input" id="ss-api-url" type="text" placeholder="https://solicitud-supervisor-worker.vgarcesb.workers.dev">
-        </div>
-        <button class="btn-agregar-hist" onclick="guardarApiUrl()">Guardar y probar conexión</button>
-        <div id="ss-sync-status" style="font-size:12px;margin-top:8px;color:#888"></div>
-        <button class="btn-agregar-hist" onclick="traerRespaldoNube()" style="margin-top:8px">⬇️ Traer respaldo desde la nube</button>
-        <div id="ss-pull-status" style="font-size:12px;margin-top:8px;color:#888"></div>
-      </div>
+      
     </div>
 
   </div>
