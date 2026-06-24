@@ -448,6 +448,7 @@ function intentarSyncRegistro(rec) {
     })
   }).then(function(r){
     if (r.ok) quitarPendienteSync(rec.id);
+    else marcarPendienteSync(rec.id);
   }).catch(function(){ marcarPendienteSync(rec.id); });
 }
 
