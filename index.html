@@ -222,7 +222,7 @@ body { font-family: "Segoe UI", Arial, sans-serif; font-size: 14px; background: 
         </p>
         <div class="campo-group">
           <label class="campo-label">URL del Worker</label>
-          <input class="campo-input" id="ss-api-url" type="text" placeholder="https://solicitud-supervisor-worker.vgarcesb.workers.dev">
+          <input class="campo-input" id="ss-api-url" type="text" placeholder="https://supervisor-api.totis.cl">
         </div>
         <button class="btn-agregar-hist" onclick="guardarApiUrl()">Guardar y probar conexión</button>
         <div id="ss-sync-status" style="font-size:12px;margin-top:8px;color:#888"></div>
@@ -407,7 +407,7 @@ function saveLS() { try { localStorage.setItem('fach_historial', JSON.stringify(
 // La app sigue funcionando 100% offline. Esto solo intenta
 // enviar/recibir cuando hay señal, sin bloquear al usuario.
 // ═══════════════════════════════════════════════════════
-var API_URL_DEFAULT = 'https://solicitud-supervisor-worker.vgarcesb.workers.dev';
+var API_URL_DEFAULT = 'https://supervisor-api.totis.cl';
 var API_URL = (function(){ try { return localStorage.getItem('ss_api_url') || API_URL_DEFAULT; } catch(e){ return API_URL_DEFAULT; } })();
 
 function marcarPendienteSync(folioId) {
