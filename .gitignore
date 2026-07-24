@@ -1,0 +1,15 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars*
+
+# Dependencies
+node_modules/
+
+# Wrangler
+.wrangler/
+
+# OS
+.DS_Store

@@ -5,12 +5,19 @@
 // offline con localStorage; esto solo sincroniza cuando hay señal.
 // ═══════════════════════════════════════════════════════
 
-const CORS_ONLY = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-};
-const JSON_HEADERS = { ...CORS_ONLY, 'Content-Type': 'application/json' };
+function corsHeaders(origin) {
+  const ok = origin !== '' && (
+    origin.includes('solicitud-supervisor.totis.cl') ||
+    origin.includes('vgarcesb-cpu.github.io') ||
+    origin.includes('workers.dev')
+  );
+  return {
+    'Access-Control-Allow-Origin': ok ? origin : 'https://solicitud-supervisor.totis.cl',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Vary': 'Origin',
+  };
+}
 
 function origenAutorizado(request) {
   const origin  = request.headers.get('Origin')  || '';
@@ -27,6 +34,9 @@ function origenAutorizado(request) {
 
 export default {
   async fetch(request, env) {
+    const CORS_ONLY = corsHeaders(request.headers.get('Origin') || '');
+    const JSON_HEADERS = { ...CORS_ONLY, 'Content-Type': 'application/json' };
+
     if (request.method === 'OPTIONS')
       return new Response(null, { status: 204, headers: CORS_ONLY });
 
