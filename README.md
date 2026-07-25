@@ -38,10 +38,13 @@ Fuerza Aérea de Chile · División de Educación · Academia de Guerra Aérea.
 | `/solicitudes/:folio_id` | DELETE | Eliminar respaldo de un registro |
 | `/config` | GET | Configuración clave/valor |
 
-**Seguridad (v1.1, jul-2026):** CORS restringido por **whitelist exacta de orígenes**
+**Seguridad (v1.2, jul-2026):** CORS restringido por **whitelist exacta de orígenes**
 (coincidencia `===`, nunca `.includes()`), header `Access-Control-Allow-Origin`
 dinámico + `Vary: Origin`, y parseo protegido por fila en el pull (una fila
 corrupta no impide restaurar el resto). Todas las queries usan `prepare().bind()`.
+**24-jul-2026:** repo de GitHub resincronizado con el Worker real en producción
+(el `worker.js` versionado había quedado atrás, con CORS `*`, tras ediciones
+hechas directo en el Dashboard de Cloudflare).
 
 ## Flujo de validación
 
