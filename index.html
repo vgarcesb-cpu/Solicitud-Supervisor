@@ -599,6 +599,44 @@ function sincronizarFolioContador() {
   if (st) st.innerHTML = '<span style="color:#2ecc71">✓ Próximo folio: ADQ-' + anioActual + '-' + folioStr(maxNum + 1) + '</span>';
 }
 
+// Consulta la nube y, si otro dispositivo ya usó folios más altos este año,
+// sube el contador local. Nunca lo baja. Si se está editando un registro
+// (editIndex >= 0) no cambia el folio en pantalla. Sin señal no hace nada.
+var verificandoFolio = false;
+function verificarFolioNube() {
+  if (verificandoFolio || !urlSyncConfirmada() || !navigator.onLine) return;
+  verificandoFolio = true;
+  fetch(API_URL + '/solicitudes').then(function(r){ return r.json(); }).then(function(resp){
+    if (!resp || !resp.ok || !Array.isArray(resp.data)) return;
+    var anio = new Date().getFullYear().toString();
+    var maxNube = 0;
+    resp.data.forEach(function(r){
+      if (r && String(r.folio_anio) === anio) {
+        var n = parseInt(r.folio_num, 10) || 0;
+        if (n > maxNube) maxNube = n;
+      }
+    });
+    if (maxNube > getFolioContador()) setFolioContador(maxNube);
+    if (editIndex < 0 && String(folioAnioActual) === anio && folioNumActual <= maxNube) {
+      folioNumActual = maxNube + 1;
+      actualizarDisplayFolio();
+      mostrarToast('Folio ajustado a ' + folioCompleto() + ' (ya usado en otro dispositivo)');
+    }
+  }).catch(function(){}).then(function(){ verificandoFolio = false; });
+}
+
+// Si el folio de una solicitud NUEVA ya existe en el historial local
+// (p. ej. un registro histórico con ese número), avanza al siguiente libre.
+function asegurarFolioLibreLocal() {
+  var usado = function(id){ return solicitudes.some(function(s){ return s && s.id === id; }); };
+  while (usado(folioCompleto())) folioNumActual++;
+  if (folioNumActual - 1 > getFolioContador()) setFolioContador(folioNumActual - 1);
+  actualizarDisplayFolio();
+}
+
+window.addEventListener('online', verificarFolioNube);
+window.addEventListener('load', function(){ setTimeout(verificarFolioNube, 1500); });
+
 
 // ── INICIO ──
 function init() {
@@ -806,6 +844,9 @@ function guardarHistorial() {
   var itsSnap = items.map(function(it){ return Object.assign({},it); });
   var sigSnap = capturarFirma();
 
+  // Solicitud nueva: no reutilizar un folio que ya está en el historial local
+  if (editIndex < 0) asegurarFolioLibreLocal();
+
   var rec = {
     id: folioCompleto(),
     folioAnio: String(folioAnioActual),
@@ -856,6 +897,7 @@ function guardarHistorial() {
     agregarItem();
     actualizarDisplayFolio();
     irPaso(1);
+    verificarFolioNube();
   }, 1000);
 }
 
@@ -910,6 +952,7 @@ function nuevoFormulario() {
   items = [];
   agregarItem();
   irPaso(1);
+  verificarFolioNube();
 }
 
 // ── IMPRIMIR ──
