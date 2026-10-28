@@ -2,7 +2,7 @@
   "name": "Solicitud Adquisición AGA",
   "short_name": "Sol.Supervisor",
   "description": "Sistema de Solicitudes de Adquisición de Materiales — Academia de Guerra Aérea, FACH",
-  "id": "/Solicitud-Supervisor/",
+  "id": "./",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
@@ -14,18 +14,12 @@
   "icons": [
     {
       "src": "icono.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "icono.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "icono.png",
+      "src": "icono-maskable.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
