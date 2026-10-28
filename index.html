@@ -411,10 +411,10 @@ var API_URL_DEFAULT = 'https://supervisor-api.totis.cl';
 // URL del Worker instalada por defecto: si no hay URL guardada, se guarda
 // la de producción para que el sync funcione sin pulsar "Guardar y probar".
 // Una URL antigua *.workers.dev se reemplaza (el CSP de _headers la bloquea).
-// Si el usuario vació el campo a propósito (ss_api_off), se respeta.
+// (ss_api_off era una marca de "desactivado" de la versión anterior; se limpia.)
 var API_URL = (function(){
   try {
-    if (localStorage.getItem('ss_api_off') === '1') return '';
+    localStorage.removeItem('ss_api_off');
     var u = localStorage.getItem('ss_api_url');
     if (!u || u.indexOf('workers.dev') !== -1) {
       u = API_URL_DEFAULT;
@@ -479,22 +479,20 @@ function reintentarSyncPendientes() {
 
 window.addEventListener('online', reintentarSyncPendientes);
 window.addEventListener('load', function(){ setTimeout(reintentarSyncPendientes, 2000); });
+// Llenar el campo URL y el estado de sync al cargar (antes solo se hacía al abrir Historial).
+window.addEventListener('load', function(){ actualizarEstadoSyncUI(); actualizarSyncDot(); });
 
 function guardarApiUrl() {
-  var url = document.getElementById('ss-api-url').value.trim().replace(/\/$/, '');
+  var campo = document.getElementById('ss-api-url');
   var st = document.getElementById('ss-sync-status');
-  if (!url) {
-    if (st) st.textContent = 'Respaldo en la nube desactivado';
-    API_URL = '';
-    try { localStorage.removeItem('ss_api_url'); localStorage.setItem('ss_api_off', '1'); } catch(e) {}
-    actualizarSyncDot();
-    return;
-  }
+  // Campo vacío = usar la URL por defecto (el placeholder muestra la misma URL).
+  var url = (campo.value.trim() || API_URL_DEFAULT).replace(/\/$/, '');
+  campo.value = url;
   if (st) st.textContent = 'Probando conexión...';
   fetch(url + '/health').then(function(r){ return r.json(); }).then(function(d){
     if (d && d.ok) {
       API_URL = url;
-      try { localStorage.setItem('ss_api_url', url); localStorage.removeItem('ss_api_off'); } catch(e) {}
+      try { localStorage.setItem('ss_api_url', url); } catch(e) {}
       if (st) st.innerHTML = '<span style="color:#2ecc71">✓ Conectado — ' + escHTML(d.app || '') + '</span>';
       reintentarSyncPendientes();
     } else {
