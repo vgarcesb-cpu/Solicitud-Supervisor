@@ -690,7 +690,7 @@ function renderItems() {
       (items.length > 1 ? '<button class="btn-eliminar-item" onclick="eliminarItem('+i+')">×</button>' : '') +
       '<div class="item-fila3">' +
         '<div><label class="campo-label" style="font-size:10px">Cant.</label>' +
-        '<input class="campo-input" style="padding:8px" type="number" min="1" value="'+it.cant+'" onchange="updItem('+i+',\'cant\',this.value)"></div>' +
+        '<input class="campo-input" style="padding:8px" type="number" min="1" value="'+escHTML(it.cant == null ? '' : it.cant)+'" onchange="updItem('+i+',\'cant\',this.value)"></div>' +
         '<div><label class="campo-label" style="font-size:10px">Unidad</label>' +
         '<input class="campo-input" style="padding:8px;text-transform:uppercase" list="dl-unidad-'+i+'" maxlength="10" value="'+escHTML(it.unidad)+'" oninput="updItemText('+i+',\'unidad\',this.value.toUpperCase())" placeholder="UN">' +
         '<datalist id="dl-unidad-'+i+'"><option value="UN"><option value="KG"><option value="MT"><option value="LT"><option value="CJ"><option value="PAQ"><option value="GL"><option value="M2"><option value="HR"><option value="DIA"></datalist>' +
@@ -1090,7 +1090,7 @@ function renderItemsHistorico() {
       (itemsHistorico.length > 1 ? '<button class="btn-eliminar-item" onclick="eliminarItemHistorico('+i+')">×</button>' : '') +
       '<div class="item-fila3">' +
         '<div><label class="campo-label" style="font-size:10px">Cant.</label>' +
-        '<input class="campo-input" style="padding:8px" type="number" min="1" value="'+it.cant+'" onchange="updItemHistorico('+i+',\'cant\',this.value)"></div>' +
+        '<input class="campo-input" style="padding:8px" type="number" min="1" value="'+escHTML(it.cant == null ? '' : it.cant)+'" onchange="updItemHistorico('+i+',\'cant\',this.value)"></div>' +
         '<div><label class="campo-label" style="font-size:10px">Unidad</label>' +
         '<input class="campo-input" style="padding:8px;text-transform:uppercase" list="dl-unidad-mh-'+i+'" maxlength="10" value="'+escHTML(it.unidad)+'" oninput="updItemHistoricoText('+i+',\'unidad\',this.value.toUpperCase())" placeholder="UN">' +
         '<datalist id="dl-unidad-mh-'+i+'"><option value="UN"><option value="KG"><option value="MT"><option value="LT"><option value="CJ"><option value="PAQ"><option value="GL"><option value="M2"><option value="HR"><option value="DIA"></datalist>' +
