@@ -3,7 +3,7 @@
   "short_name": "Sol.Supervisor",
   "description": "Sistema de Solicitudes de Adquisición de Materiales — Academia de Guerra Aérea, FACH",
   "id": "./",
-  "start_url": "./index.html",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
