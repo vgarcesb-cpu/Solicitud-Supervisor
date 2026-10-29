@@ -1,8 +1,9 @@
 name = "solicitud-supervisor-worker"
 main = "worker.js"
+# Dominio propio: supervisor-api.totis.cl · Secret requerido: SYNC_KEY (no va en este archivo)
 compatibility_date = "2024-01-01"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "solicitud-supervisor-db"
-database_id = "CONFIGURAR-EN-CLOUDFLARE"
+database_id = "52df5e2f-e887-492e-bf7d-baec1e6b0455"

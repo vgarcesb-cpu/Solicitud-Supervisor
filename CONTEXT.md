@@ -1,83 +1,141 @@
-# CONTEXT.md — Solicitud Supervisor (AGA FACH)
+# CONTEXT.md · Solicitud Supervisor (AGA FACH)
 
-**🔗 URL de producción:** https://solicitud-supervisor.totis.cl/
-**🔗 URL alterna (mismo despliegue):** https://vgarcesb-cpu.github.io/Solicitud-Supervisor/
-**Repo:** `vgarcesb-cpu/Solicitud-Supervisor` (público, GitHub Pages)
-**Worker:** `https://solicitud-supervisor-worker.vgarcesb.workers.dev`
-**Stack:** PWA híbrida offline-first — `index.html` (localStorage = fuente de verdad) + `worker.js` (Cloudflare Worker) + D1 como **respaldo**, NUNCA fuente de verdad. Tiene `manifest.json` + `sw.js` (Service Worker, ojo con caché al depurar).
-**Uso:** personal, un solo dispositivo activo a la vez (Mac o S25, no simultáneo).
+Contexto técnico para retomar el proyecto. Actualizado el 29-oct-2026.
 
----
+## Direcciones
 
-## 1. Flujo principal — Nueva Solicitud (3 pasos)
+| Qué | Dirección |
+|---|---|
+| App (producción) | https://solicitud-supervisor.totis.cl |
+| API de respaldo | https://supervisor-api.totis.cl |
+| Repo | `vgarcesb-cpu/Solicitud-Supervisor` (público) |
+| Worker en Cloudflare | `solicitud-supervisor-worker` (dominio propio: supervisor-api.totis.cl) |
+| Base D1 | `solicitud-supervisor-db` (id `52df5e2f-e887-492e-bf7d-baec1e6b0455`) |
+| Login de Access | https://totis.cloudflareaccess.com |
 
-1. **Paso 1 — Datos**: folio automático (correlativo por año, `ADQ-AAAA-NNNN`), fecha, escuadrilla, comandante, observaciones. Al final de este paso está la tarjeta **"Respaldo en la nube"** (ver sección 4).
-2. **Paso 2 — Materiales**: ítems con cantidad, unidad (datalist con sugerencias), descripción, precio unitario. Calcula subtotal, IVA 19%, total en vivo.
-3. **Paso 3 — Resumen**: muestra resumen de datos + ítems + totales. Sección de **Firma**: nombre, grado, cargo + canvas de firma a mano (mouse/touch). Botones:
-   - **🖨️ Guardar / Imprimir PDF** → llena `#print-area` (oculto, solo visible en `@media print`) con el documento oficial FACH y llama `window.print()`.
-   - **💾 Guardar en historial** → guarda en `localStorage` (`fach_historial`) e intenta sync a D1 vía `intentarSyncRegistro()`.
-   - Botón inferior **"+ Nuevo"** (aparece solo en paso 3) limpia el formulario y avanza el folio.
+Para conectar un dispositivo nuevo (Mac, S26 u otro) se abre siempre https://solicitud-supervisor.totis.cl. La copia que GitHub Pages publica en `vgarcesb-cpu.github.io/Solicitud-Supervisor/` no sincroniza: el Worker solo acepta el origen solicitud-supervisor.totis.cl. La URL antigua `solicitud-supervisor-worker.vgarcesb.workers.dev` ya no se usa; si un dispositivo la tiene guardada, la app la cambia sola por supervisor-api.totis.cl.
 
-## 2. Flujo Historial
+El Dashboard de Cloudflare traducido por Chrome muestra "request-supervisor-worker" y "request-supervisor-db". Son los mismos recursos con el nombre traducido. Conviene desactivar la traducción para ese sitio.
 
-- Acceso: botón **"📁 Historial"** en la barra de navegación inferior (visible en cualquier paso).
-- Lista todos los registros guardados (`solicitudes` array), más recientes primero. Cada tarjeta muestra folio, badge `HISTÓRICO` si aplica, escuadrilla, cantidad de ítems, total, observaciones.
-- **Editar**: carga el registro completo en el flujo normal de 3 pasos (Datos→Materiales→Resumen+Firma+Imprimir) — **igual para históricos y normales** desde el fix de 2026-06-24. Permite completar firma/nombre/grado/cargo si faltaban, modificar ítems, e imprimir.
-- **Eliminar**: borra de `localStorage` y, si hay URL de Worker confirmada y hay señal, intenta `DELETE` en D1.
-- **"+ Agregar Registro Antiguo"**: abre el modal pequeño (`modal-historico`) para ingresar rápidamente un folio histórico de papel (folio manual tipo `ADQ-2024-0012`, ítems, sin firma) — sigue existiendo como atajo de carga rápida; una vez guardado, también se puede reabrir/editar en el flujo completo igual que cualquier otro.
-- **"🔄 Sincronizar próximo folio"**: recalcula el contador de folios según el máximo existente (normales + históricos) del año actual, para evitar duplicar números.
+## Stack y modelo de datos
 
-## 3. Flujo de Sincronización (sync híbrido)
+- `index.html` único (HTML + CSS + JS sin frameworks), `manifest.json`, `sw.js`, `icono.png` (512×512) e `icono-maskable.png`.
+- Despliegue: Cloudflare Pages conectado al repo. Un commit en `main` queda publicado en 1 a 2 minutos. `_headers` define CSP y headers de seguridad.
+- La app está detrás de Cloudflare Access. Sin sesión de Access, cualquier archivo del sitio redirige al login.
+- `localStorage` es la fuente de verdad. D1 es respaldo y medio para pasar datos entre dispositivos.
+- Uso: una persona, Mac y S26. Pueden usarse el mismo día, incluso sin señal.
 
-- **Push (subir)**: automático. Al guardar cualquier registro, `intentarSyncRegistro()` intenta POST al Worker. Si falla (red **o** servidor — fix 2026-06-24), se marca pendiente en `localStorage` (`fach_sync_pendientes`) y se reintenta solo al recuperar conexión (`window.addEventListener('online', ...)`) o al recargar la app (2s después de `load`).
-- **Pull (bajar)**: manual, vía botón **"⬇️ Traer respaldo desde la nube"**. Trae todos los registros de D1 y los fusiona con los locales por `id` (sin duplicar). Útil para recuperar datos creados en otro dispositivo.
-- **Indicador visual**: punto de color de 12px junto a "N° Folio" en el header (todas las páginas/pasos):
-  - 🟢 verde = URL configurada y todo respaldado (sin pendientes)
-  - 🟡 dorado = hay registros pendientes de subir
-  - ⚪ gris = sin URL de Worker configurada
-  - Función `actualizarSyncDot()`, se ejecuta automáticamente desde `actualizarDisplayFolio()`.
+Claves de `localStorage`:
 
-## 4. Tarjeta "Respaldo en la nube" (ubicada al final del Paso 1)
-- Campo URL del Worker + botón **"Guardar y probar conexión"** (hace `GET /health`, guarda en `localStorage` si responde OK).
-- Estado de texto: "✓ Conectado — ..." o error.
-- Botón **"⬇️ Traer respaldo desde la nube"** + estado "X nuevo(s), Y actualizado(s)".
-- *(Reubicada aquí el 2026-06-24; antes vivía dentro del panel de Historial, se perdía de vista con facilidad.)*
+| Clave | Contenido |
+|---|---|
+| `fach_historial` | Arreglo de solicitudes |
+| `fach_folio` | Último número de folio usado en el año |
+| `fach_sync_pendientes` | Folios guardados que aún no suben a D1 |
+| `ss_api_url` | URL del Worker (se precarga sola) |
+| `ss_api_key` | Clave de sincronización de este dispositivo |
 
----
+Campos de cada solicitud que no son del formulario: `id` (folio), `uid` (huella única, solo solicitudes creadas desde el 29-oct-2026), `esHistorico` y `folioCustom` (registros de papel), `folioAnterior` (folio original de una solicitud reasignada) y `conflictoNube`.
 
-## 5. Historial de cambios aplicados (2026-06-23/24)
+## Flujo principal
 
-1. **Fix sync — falta de `id`**: `guardarHistorial()` no asignaba `id` al registro → nunca sincronizaba a D1 (rechazo silencioso, error 400 del Worker por `folio_id` faltante). Se agregó `id: folioCompleto()` (y se preserva `id` original al editar: `rec.id = solicitudes[editIndex].id || rec.id;`).
-2. **Fix reintento de pendientes**: `intentarSyncRegistro()` solo marcaba pendiente ante error de **red**; un error de **servidor** dejaba el registro perdido sin reintento futuro. Se agregó `else marcarPendienteSync(rec.id);` en el `.then()`.
-3. **Históricos → flujo completo**: se eliminó el branch en `cargarHistorial()` que abría el modal pequeño para registros `esHistorico`. Ahora editan en el mismo flujo que los normales (con firma, ítems editables, e impresión via `imprimirPDF()`/`#print-area` ya existentes — no se duplicó lógica de impresión).
-4. **UX — Respaldo en la nube reubicado**: tarjeta movida del Historial al final del Paso 1.
-5. **Indicador visual de sync**: punto de color en el header (ver sección 3).
+1. Paso 1, Datos: folio automático `ADQ-AAAA-NNNN`, fecha, escuadrilla, comandante y observaciones. Al final está la tarjeta "Respaldo en la nube".
+2. Paso 2, Materiales: ítems con cantidad, unidad, descripción y precio. Calcula subtotal, IVA 19 % y total.
+3. Paso 3, Resumen: firma (nombre, grado, cargo y canvas), "Guardar / Imprimir PDF" y "Guardar en historial".
 
-## 6. Migración manual de datos antiguos (ejecutada una vez, 2026-06-23)
-Los registros creados **antes** del fix #1 quedaron sin `id` en el `localStorage` de cada dispositivo donde se crearon — un fix de código no repara datos ya guardados. Se reparó así (puede volver a necesitarse si aparece un caso similar):
-```js
-// 1. Reparar localStorage (agrega id a los que no lo tengan)
-var s = JSON.parse(localStorage.getItem('fach_historial') || '[]');
-s.forEach(function(r){ if (!r.id) r.id = r.folioCustom || ('ADQ-'+r.folioAnio+'-'+r.folioNum); });
-localStorage.setItem('fach_historial', JSON.stringify(s));
+Historial: lista de solicitudes con Editar y Eliminar, "+ Agregar Registro Antiguo" para folios de papel y "Sincronizar próximo folio". Editar abre el flujo completo de 3 pasos, también para los históricos.
 
-// 2. Forzar reenvío manual de un registro puntual ya rechazado antes
-var rec = s.find(function(r){ return r.id === 'ADQ-AAAA-NNNN'; }); // ajustar folio
-fetch('https://solicitud-supervisor-worker.vgarcesb.workers.dev/solicitudes', {
-  method:'POST', headers:{'Content-Type':'application/json'},
-  body: JSON.stringify({ folio_id: rec.id, folio_anio: rec.folioAnio, folio_num: rec.folioNum,
-    folio_custom: rec.folioCustom||null, fecha: rec.fecha, escuadrilla: rec.escuadrilla, cdte: rec.cdte,
-    observaciones: rec.observaciones, firma_nombre: rec.firmaNombre, firma_grado: rec.firmaGrado,
-    firma_cargo: rec.firmaCargo, firma_img: rec.firmaImg, items: rec.items, total: rec.total,
-    es_historico: !!rec.esHistorico })
-}).then(r=>r.json()).then(console.log);
+## Sincronización
+
+- Subida: automática al guardar. Si no hay señal o el Worker falla, el folio queda en `fach_sync_pendientes` y se reintenta al volver la señal o al abrir la app.
+- Bajada: manual, con "Traer respaldo desde la nube". No reemplaza un registro local con cambios pendientes ni un registro local distinto que tenga el mismo folio.
+- Punto junto a "N° Folio": verde sin pendientes, dorado con pendientes, gris sin URL o sin clave.
+
+Folios entre dispositivos:
+
+- Al abrir la app, al pulsar "+ Nuevo", después de guardar y al volver la señal, la app consulta D1. Si otro dispositivo usó un folio más alto, sube el contador local. Nunca lo baja.
+- Una solicitud nueva no reutiliza un folio que ya esté en el historial local.
+- Si dos dispositivos crean el mismo folio sin señal, conserva el número el que sincroniza primero. El otro recibe 409 del Worker, pasa al siguiente folio libre y queda con la marca "REASIGNADO · antes ADQ-…-… · reimprimir". La marca se quita al imprimir de nuevo esa solicitud.
+- Los históricos de papel y los registros sin `uid` nunca se renumeran. Si chocan, quedan con la marca "CONFLICTO EN LA NUBE" para revisión manual.
+
+## Worker v1.4 (activo desde el 29-oct-2026, versión `82e27533`)
+
+| Endpoint | Método | Clave | Función |
+|---|---|---|---|
+| `/health` | GET | no | Estado, versión y `auth: true/false` según la clave enviada |
+| `/solicitudes` | POST | sí | Upsert por `folio_id`; 409 si el folio es de otra solicitud |
+| `/solicitudes` | GET | sí | Respaldo completo |
+| `/solicitudes/:folio_id?uid=` | DELETE | sí | Borra solo si el `uid` coincide |
+| `/config` | GET | sí | Tabla `configuracion` |
+
+- Autenticación: header `Authorization: Bearer <clave>`, comparado con el Secret `SYNC_KEY` del Worker. El header Origin no autentica, porque cualquiera lo escribe en un curl.
+- CORS: solo `https://solicitud-supervisor.totis.cl`. Un Origin distinto recibe 403.
+- POST valida folio, fecha, firma (data URL JPEG o PNG, máximo 1 MB), `uid` e ítems (máximo 200), y guarda cada ítem solo con `cant`, `unidad`, `descripcion` y `pUnitario`.
+- El control de folio repetido va dentro del mismo UPSERT (`WHERE COALESCE(solicitudes.uid,'') = COALESCE(excluded.uid,'')`). Si no escribe nada, responde 409 con `max_num`, el folio más alto del año.
+- Sin `SYNC_KEY` configurado, las rutas de datos quedan cerradas.
+
+Comprobación rápida desde la Terminal:
+
+```bash
+curl -s https://supervisor-api.totis.cl/health; echo        # version 1.4, auth false
+curl -s https://supervisor-api.totis.cl/solicitudes; echo   # "Clave de sincronización inválida"
 ```
 
-## 7. Lecciones aprendidas (ya en skill `portales-totis-maestro`)
-- Un fix de código no repara datos ya guardados en `localStorage` de sesiones previas — requiere migración manual puntual.
-- Marcar pendiente de sync debe cubrir errores de red **y** de servidor, no solo uno de los dos.
-- Antes de sospechar de caché del Service Worker, confirmar primero si el dato realmente llegó al origen (D1) — "no veo el cambio" puede ser dato faltante, no caché.
+## Clave de sincronización
 
-## 8. Pendiente / ideas futuras (no urgente)
-- Auto-pull silencioso al cargar la app — evaluado y **descartado por ahora**: uso es de un solo dispositivo a la vez, los indicadores visuales ya cubren la necesidad.
-- Si en el futuro se usa en más de un dispositivo simultáneamente, reconsiderar pull automático y posible manejo de conflictos (actualmente "last write wins" sin merge inteligente).
+La clave vive en dos lugares: el Secret `SYNC_KEY` del Worker (Configuración → Variables y secretos) y `localStorage` de cada dispositivo. Nunca va en el repo ni en un chat.
+
+Para conectar un dispositivo nuevo:
+
+1. En el Mac, abrir https://solicitud-supervisor.totis.cl, abrir la consola (Cmd + Option + J) y ejecutar `copy(localStorage.getItem('ss_api_key'))`. Debe medir 48 caracteres.
+2. Enviarla por un correo a uno mismo, copiarla en el dispositivo nuevo y pegarla en "Clave de sincronización".
+3. Pulsar "Guardar y probar conexión". Debe decir "· clave correcta".
+4. Borrar el correo, también de la papelera.
+
+Escribirla a mano en el teléfono falló una vez (28-oct). Hay que copiar y pegar.
+
+Para cambiar la clave: generar otra con `openssl rand -hex 24`, reemplazar el Secret en Cloudflare y pegarla en cada dispositivo.
+
+## PWA
+
+- `index.html` enlaza `manifest.json` con `crossorigin="use-credentials"`. Sin ese atributo Chrome pide el manifest sin la cookie de Access, recibe el login y el CSP lo bloquea ("No se detectó ningún manifiesto").
+- `sw.js` v3 (`solicitud-supervisor-v3`): la página se busca primero en la red y la caché queda para cuando no hay señal, así cada versión nueva llega sola. Manifest e iconos se sirven desde la caché. No intercepta la API ni los POST y DELETE. Nunca guarda una respuesta redirigida, como el login de Access.
+- Subir `CACHE_NAME` solo cuando cambien `manifest.json` o los iconos.
+- Instalar en el S26: con sesión de Access abierta, menú ⋮ → "Instalar app". El icono queda sin el logo de Chrome y abre a pantalla completa. Una vez instalada, abre sin señal.
+
+## Despliegue y validación
+
+Todo cambio pasa por tres etapas: Mac, después GitHub y Cloudflare, y al final el S26. El S26 decide.
+
+- Frontend: subir los archivos al repo con "Add file → Upload files". Pages publica solo.
+- Worker: pegar `worker.js` en el editor del Dashboard y pulsar Implementar. Después subir el mismo archivo al repo para que el repo y producción coincidan.
+- D1: en la Consola, una instrucción por envío, y verificar con un `SELECT` aparte.
+- Volver atrás: Worker → Implementaciones → versión anterior. D1 tiene Time Travel de 30 días.
+
+## Historial de cambios
+
+28 y 29-oct-2026:
+
+1. URL del Worker precargada. Un campo vacío usa la URL por defecto y una URL `workers.dev` antigua se reemplaza.
+2. PWA instalable: link al manifest, registro de `sw.js`, icono maskable. Después, `crossorigin="use-credentials"` por Access y `sw.js` v3.
+3. Protección de folios: consulta a D1 antes de asignar el siguiente folio.
+4. XSS: la cantidad de los ítems se escapa con `escHTML()` en el formulario y en el modal de históricos.
+5. Worker v1.3: clave de sincronización. Antes, un curl sin Origin leía, cambiaba y borraba todas las solicitudes.
+6. Worker v1.4 y columna `uid`: los folios repetidos entre dispositivos ya no se pisan.
+7. Editar un registro conserva folio, `uid`, folio de papel y marca HISTÓRICO. Antes un histórico perdía la marca y un folio de papel sin formato pasaba a 0001.
+8. "Traer respaldo" ya no borra ediciones locales pendientes.
+
+23 y 24-jun-2026: `id` asignado al guardar, reintento ante error de servidor, históricos en el flujo completo, tarjeta de respaldo movida al Paso 1 e indicador de sincronización.
+
+## Lecciones
+
+- Un fix de código no repara datos guardados antes en `localStorage`. Puede requerir una migración puntual.
+- Antes de culpar a la caché del Service Worker, revisar si el dato llegó a D1.
+- El Worker editado en el Dashboard se desfasa del repo. Después de cada despliegue, subir el mismo `worker.js` al repo y comparar.
+- Con Access delante, todo archivo que el navegador pida sin cookies (manifest, por ejemplo) termina en el login.
+- La consola de D1 no siempre limpia el campo después de Enter. Revisar que esté vacío antes de escribir la siguiente instrucción.
+
+## Pendiente
+
+- No limpiar la pantalla al guardar: hoy, un segundo después de guardar, el formulario se vacía y pasa al folio siguiente. La regla es que solo se limpie con "+ Nuevo".
+- La fila `api_worker_url` de la tabla `configuracion` en D1 todavía dice la URL `workers.dev`. La app no la usa. Se corrige con un `UPDATE` cuando convenga.

@@ -1,64 +1,74 @@
-# Solicitud Adquisición Supervisor — AGA · FACH
+# Solicitud Adquisición Supervisor · AGA FACH
 
-PWA **híbrida offline-first** para emitir Solicitudes de Adquisición de Supervisor en terreno.
+PWA para emitir Solicitudes de Adquisición de Supervisor en terreno.
 Fuerza Aérea de Chile · División de Educación · Academia de Guerra Aérea.
 
-> **Principio de diseño:** la app funciona 100% sin internet. `localStorage` es la
-> fuente de verdad; el respaldo en la nube (Cloudflare Worker + D1) es **opcional**
-> y solo sincroniza cuando hay señal.
+App: **https://solicitud-supervisor.totis.cl**
+API de respaldo: https://supervisor-api.totis.cl
 
----
+La app funciona sin internet. `localStorage` es la fuente de verdad. Cuando hay señal, cada solicitud se respalda en Cloudflare D1 a través de un Worker, y desde ahí se recupera en otro dispositivo.
 
-## Características
+## Qué hace
 
-- **Flujo de 3 pasos:** Datos → Materiales → Resumen, con validación por paso.
-- **Folio automático** formato `ADQ-AAAA-NNNN` (folio custom soportado).
-- **Firma en canvas** híbrida touch + mouse (optimizada para Samsung S25).
-- **Impresión PDF** con membrete institucional FACH (fix Android: colores exactos y bordes garantizados).
-- **Historial local** con reapertura del flujo completo de 3 pasos.
-- **Respaldo en la nube (opcional):**
-  - Tarjeta "Respaldo en la nube" en el Paso 1: URL del Worker + *Guardar y probar conexión*.
-  - Indicador de sincronización en el header: 🟢 todo respaldado · 🟡 pendiente · ⚪ sin configurar/sin señal.
-  - *Traer respaldo desde la nube*: restaura registros en otro dispositivo (pull).
-- **Export / Import JSON** como respaldo manual adicional.
+- Flujo de 3 pasos (Datos, Materiales, Resumen) con validación por paso.
+- Folio automático `ADQ-AAAA-NNNN`. Los folios de papel antiguos se cargan como registros históricos.
+- Firma en canvas con dedo o mouse, pensada para el Samsung S25/S26.
+- PDF con membrete institucional FACH.
+- Historial local con edición en el flujo completo.
+- Respaldo en la nube con clave de sincronización e indicador en el encabezado: verde (todo respaldado), dorado (pendiente), gris (sin URL o sin clave).
+- Detección de folios repetidos entre dispositivos. Si el Mac y el teléfono crean el mismo folio sin señal, la solicitud que sincroniza después pasa al folio siguiente y queda marcada para reimprimir.
+- Export / Import JSON como respaldo manual.
+- Se instala como app en Android y abre sin señal.
 
-## Stack
+## Archivos
 
-- **Frontend:** single-file `index.html` (HTML5 + CSS + Vanilla JS, sin frameworks) + `manifest.json` + `sw.js` (cache-first) + icono PNG 512×512.
-- **Respaldo opcional:** Cloudflare Worker (API REST) + D1 (SQLite serverless).
-- **Almacenamiento local:** `localStorage` (fuente de verdad).
+| Archivo | Función |
+|---|---|
+| `index.html` | App completa (HTML + CSS + JS, sin frameworks) |
+| `manifest.json` | Datos de instalación de la PWA |
+| `sw.js` | Service Worker: red primero para la página, caché sin señal |
+| `icono.png`, `icono-maskable.png` | Iconos 512×512 |
+| `_headers` | CSP y headers de seguridad (Cloudflare Pages) |
+| `worker.js` | Worker de respaldo, v1.4 |
+| `schema.sql` | Tablas de D1 y migración de la columna `uid` |
+| `wrangler.toml` | Nombre del Worker y enlace a D1 |
+| `CONTEXT.md` | Detalle técnico, procedimientos e historial de cambios |
 
-## API del Worker de respaldo (v1.1)
+## API del Worker (v1.4)
+
+Todas las rutas, salvo `/health`, exigen `Authorization: Bearer <clave>`. La clave es el Secret `SYNC_KEY` del Worker.
 
 | Endpoint | Método | Función |
 |---|---|---|
-| `/health` | GET | Estado y versión del Worker |
-| `/solicitudes` | POST | Upsert por `folio_id` (sync desde el dispositivo) |
-| `/solicitudes` | GET | Pull completo (restaurar en otro dispositivo) |
-| `/solicitudes/:folio_id` | DELETE | Eliminar respaldo de un registro |
+| `/health` | GET | Estado, versión y si la clave enviada es válida |
+| `/solicitudes` | POST | Guarda o actualiza por `folio_id`; 409 si el folio es de otra solicitud |
+| `/solicitudes` | GET | Respaldo completo |
+| `/solicitudes/:folio_id?uid=` | DELETE | Borra solo si el `uid` coincide |
 | `/config` | GET | Configuración clave/valor |
 
-**Seguridad (v1.2, jul-2026):** CORS restringido por **whitelist exacta de orígenes**
-(coincidencia `===`, nunca `.includes()`), header `Access-Control-Allow-Origin`
-dinámico + `Vary: Origin`, y parseo protegido por fila en el pull (una fila
-corrupta no impide restaurar el resto). Todas las queries usan `prepare().bind()`.
-**24-jul-2026:** repo de GitHub resincronizado con el Worker real en producción
-(el `worker.js` versionado había quedado atrás, con CORS `*`, tras ediciones
-hechas directo en el Dashboard de Cloudflare).
+CORS acepta solo `https://solicitud-supervisor.totis.cl`. Las consultas usan `prepare().bind()`.
+
+## Conectar un dispositivo nuevo
+
+1. Abrir https://solicitud-supervisor.totis.cl e iniciar sesión en Cloudflare Access.
+2. En "Respaldo en la nube", la URL del Worker ya viene cargada.
+3. Pegar la clave de sincronización (se copia desde el Mac; el procedimiento está en `CONTEXT.md`).
+4. Pulsar "Guardar y probar conexión". Debe decir "· clave correcta".
+5. Pulsar "Traer respaldo desde la nube".
+6. En Android: menú ⋮ → "Instalar app".
 
 ## Flujo de validación
 
-Todo cambio pasa 3 etapas obligatorias:
+Todo cambio pasa por tres etapas:
 
-1. **Mac** — desarrollo y prueba (Chrome/Safari + DevTools).
-2. **GitHub / Cloudflare** — deploy (Pages auto-deploy; Worker vía Dashboard).
-3. **Samsung S25** — prueba final en terreno (juez definitivo).
+1. Mac: desarrollo y prueba en Chrome/Safari con DevTools.
+2. GitHub y Cloudflare: Pages publica el repo en 1 a 2 minutos. El Worker se despliega desde el Dashboard y después se sube el mismo `worker.js` al repo.
+3. Samsung S26: prueba final en terreno.
 
-## Estado actual
+## Estado
 
-- Worker **v1.1** desplegado y validado Mac + S25 el **06-jul-2026**
-  (push, pull y sync verde verificados con la whitelist activa).
+29-oct-2026: Worker v1.4 activo, Service Worker v3, app instalada en el S26. Validado en Mac y S26.
 
-## Licencia / uso
+## Uso
 
 Proyecto interno AGA · FACH. Uso institucional.

@@ -44,4 +44,4 @@ INSERT OR IGNORE INTO configuracion (clave, valor) VALUES
   ('institucion_nombre', 'Fuerza Aérea de Chile (FACH)'),
   ('unidad_nombre',      'Academia de Guerra Aérea'),
   ('responsable_nombre', 'Victor Manuel Garces Borje'),
-  ('api_worker_url',     'https://solicitud-supervisor-worker.vgarcesb.workers.dev');
+  ('api_worker_url',     'https://supervisor-api.totis.cl');
