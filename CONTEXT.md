@@ -45,7 +45,7 @@ Campos de cada solicitud que no son del formulario: `id` (folio), `uid` (huella 
 
 Campos obligatorios: "Siguiente" no avanza sin fecha y comandante (Paso 1) ni con ítems incompletos (Paso 2: descripción, cantidad > 0 y precio > 0). Guardar exige los pasos 1 y 2. Imprimir exige además nombre, grado, cargo y firma a mano. El trazo se detecta buscando píxeles oscuros en el canvas, así que también cuenta una firma restaurada del historial.
 
-Firma: el canvas mide el ancho de la pantalla por 200 px de alto. Una firma guardada se dibuja ajustada a ese tamaño sin deformarla (FIX-006). La imagen original queda en `sigDataURL` y es la que se guarda y se imprime mientras no se dibuje encima (`firmaModificada`). Girar la pantalla vuelve a ajustarla desde esa imagen (FIX-010).
+Firma: el canvas mide el ancho de la pantalla por 200 px de alto. Una firma guardada se dibuja ajustada a ese tamaño sin deformarla (FIX-006). La imagen original queda en `sigDataURL` y es la que se guarda y se imprime mientras no se dibuje encima (`firmaModificada`). Girar la pantalla vuelve a ajustarla desde esa imagen (FIX-010). La app instalada queda fija en vertical (`"orientation": "portrait"` en `manifest.json`, decisión del 29-oct-2026), así que la rotación solo ocurre si se abre la URL en el navegador.
 
 Al guardar, la pantalla no se limpia. La solicitud queda abierta en modo edición y aparece un modal con el folio, el estado del respaldo y tres botones: "Imprimir PDF", "+ Nueva solicitud" y "Seguir viendo esta solicitud". Guardar otra vez actualiza la misma solicitud. El formulario se limpia solo con "+ Nuevo" (barra inferior del Paso 3) o "+ Nueva solicitud" (modal). La impresión espera 700 ms antes de abrir el diálogo.
 
@@ -152,4 +152,9 @@ Todo cambio pasa por tres etapas: Mac, después GitHub y Cloudflare, y al final 
 
 ## Pendiente
 
-- Export / Import JSON como respaldo manual. El README anterior lo mencionaba, pero la app no lo tiene.
+Nada pendiente al 29-oct-2026.
+
+## Descartado por ahora
+
+- Export / Import JSON como respaldo manual (29-oct-2026). Cada solicitud ya queda en tres lugares: el Mac, el S26 y D1, y D1 tiene Time Travel de 30 días. "Traer respaldo desde la nube" recupera todo en un dispositivo nuevo o borrado. Si algún día se necesita una copia fuera de Cloudflare (archivo anual, auditoría), conviene exportarla desde D1 y no agregar un botón a la app.
+- Auto-pull silencioso al abrir la app (jun-2026). La protección de folios ya consulta D1 al abrir, al pulsar "+ Nuevo", después de guardar y al volver la señal.
