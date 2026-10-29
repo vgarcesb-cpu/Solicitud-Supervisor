@@ -137,7 +137,7 @@ export default {
       // Health check — público, informa si la clave enviada es válida
       if (path === '/health')
         return json({
-          ok: true, app: 'SOLICITUD-SUPERVISOR', version: '1.3',
+          ok: true, app: 'SOLICITUD-SUPERVISOR', version: '1.4',
           auth: claveValida(request, env), ts: new Date().toISOString()
         }, 200, origin);
 
