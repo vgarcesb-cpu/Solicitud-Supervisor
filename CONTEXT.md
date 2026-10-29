@@ -131,6 +131,7 @@ Todo cambio pasa por tres etapas: Mac, después GitHub y Cloudflare, y al final 
 9. La pantalla no se limpia al guardar: la solicitud queda abierta en edición y un modal confirma el folio. Guardar dos veces ya no puede crear un duplicado.
 10. Impresión a los 700 ms (antes 200 ms).
 11. Encabezado, resumen y PDF usan el folio del registro abierto. Antes, "Traer respaldo" podía cambiar el folio mostrado y un histórico de papel se imprimía como `ADQ-AAAA-0000`.
+12. D1: `configuracion.api_worker_url` actualizada a `https://supervisor-api.totis.cl` (antes la URL `workers.dev`).
 
 23 y 24-jun-2026: `id` asignado al guardar, reintento ante error de servidor, históricos en el flujo completo, tarjeta de respaldo movida al Paso 1 e indicador de sincronización.
 
@@ -144,6 +145,5 @@ Todo cambio pasa por tres etapas: Mac, después GitHub y Cloudflare, y al final 
 
 ## Pendiente
 
-- La fila `api_worker_url` de la tabla `configuracion` en D1 todavía dice la URL `workers.dev`. La app no la usa. Se corrige con un `UPDATE` cuando convenga.
 - Export / Import JSON como respaldo manual. El README anterior lo mencionaba, pero la app no lo tiene.
 - Validación de campos obligatorios por paso (FIX-009). Hoy solo el modal de registro histórico valida; el flujo de 3 pasos deja avanzar y guardar sin escuadrilla ni ítems.
