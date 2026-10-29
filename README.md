@@ -10,7 +10,7 @@ La app funciona sin internet. `localStorage` es la fuente de verdad. Cuando hay 
 
 ## Qué hace
 
-- Flujo de 3 pasos (Datos, Materiales, Resumen). Los campos obligatorios todavía no se validan (pendiente).
+- Flujo de 3 pasos (Datos, Materiales, Resumen). No deja avanzar sin fecha, comandante e ítems completos (descripción, cantidad y precio). El PDF exige nombre, grado, cargo y firma a mano; guardar sin firma queda como borrador.
 - Folio automático `ADQ-AAAA-NNNN`. Los folios de papel antiguos se cargan como registros históricos.
 - Firma en canvas con dedo o mouse, pensada para el Samsung S25/S26.
 - PDF con membrete institucional FACH.

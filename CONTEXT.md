@@ -43,6 +43,8 @@ Campos de cada solicitud que no son del formulario: `id` (folio), `uid` (huella 
 2. Paso 2, Materiales: ítems con cantidad, unidad, descripción y precio. Calcula subtotal, IVA 19 % y total.
 3. Paso 3, Resumen: firma (nombre, grado, cargo y canvas), "Guardar / Imprimir PDF" y "Guardar en historial". "Guardar / Imprimir PDF" solo imprime; no guarda en el historial.
 
+Campos obligatorios: "Siguiente" no avanza sin fecha y comandante (Paso 1) ni con ítems incompletos (Paso 2: descripción, cantidad > 0 y precio > 0). Guardar exige los pasos 1 y 2. Imprimir exige además nombre, grado, cargo y firma a mano. El trazo se detecta buscando píxeles oscuros en el canvas, así que también cuenta una firma restaurada del historial.
+
 Al guardar, la pantalla no se limpia. La solicitud queda abierta en modo edición y aparece un modal con el folio, el estado del respaldo y tres botones: "Imprimir PDF", "+ Nueva solicitud" y "Seguir viendo esta solicitud". Guardar otra vez actualiza la misma solicitud. El formulario se limpia solo con "+ Nuevo" (barra inferior del Paso 3) o "+ Nueva solicitud" (modal). La impresión espera 700 ms antes de abrir el diálogo.
 
 El encabezado, el resumen y el PDF muestran el folio del registro abierto, incluido el folio de papel de un histórico. "Traer respaldo" y "Sincronizar próximo folio" no cambian ese folio; solo ajustan el contador para la próxima solicitud.
@@ -132,6 +134,8 @@ Todo cambio pasa por tres etapas: Mac, después GitHub y Cloudflare, y al final 
 10. Impresión a los 700 ms (antes 200 ms).
 11. Encabezado, resumen y PDF usan el folio del registro abierto. Antes, "Traer respaldo" podía cambiar el folio mostrado y un histórico de papel se imprimía como `ADQ-AAAA-0000`.
 12. D1: `configuracion.api_worker_url` actualizada a `https://supervisor-api.totis.cl` (antes la URL `workers.dev`).
+13. Validación por paso (FIX-009). Paso 1: fecha y comandante. Paso 2: al menos un ítem; cada ítem usado con descripción, cantidad > 0 y precio > 0. Imprimir exige además nombre, grado, cargo y trazo de firma; guardar sin firma se permite como borrador. Los campos que faltan quedan en rojo y un aviso los nombra. "Atrás" no valida. Un registro antiguo sin comandante o sin ítems hay que completarlo antes de volver a guardarlo.
+14. Editar una solicitud firmada ya no borra la firma: al abrir un registro se carga su firma guardada en el canvas. Antes, editar y guardar la reemplazaba por una firma en blanco.
 
 23 y 24-jun-2026: `id` asignado al guardar, reintento ante error de servidor, históricos en el flujo completo, tarjeta de respaldo movida al Paso 1 e indicador de sincronización.
 
@@ -146,4 +150,3 @@ Todo cambio pasa por tres etapas: Mac, después GitHub y Cloudflare, y al final 
 ## Pendiente
 
 - Export / Import JSON como respaldo manual. El README anterior lo mencionaba, pero la app no lo tiene.
-- Validación de campos obligatorios por paso (FIX-009). Hoy solo el modal de registro histórico valida; el flujo de 3 pasos deja avanzar y guardar sin escuadrilla ni ítems.

@@ -69,6 +69,8 @@ body { font-family: "Segoe UI", Arial, sans-serif; font-size: 14px; background: 
 .campo-input { width: 100%; padding: 11px 13px; border: 1.5px solid var(--borde); border-radius: 8px; font-size: 15px; font-family: inherit; color: #000; background: var(--gris); transition: all 0.2s; outline: none; -webkit-appearance: none; }
 .campo-input::-webkit-calendar-picker-indicator { display: none !important; }
 .campo-input::-webkit-list-button { display: none !important; }
+.campo-error, .campo-error:focus { border-color:#e74c3c !important; background:#fff5f5 !important; box-shadow:0 0 0 3px rgba(231,76,60,0.15) !important; }
+.sig-error { border-color:#e74c3c !important; box-shadow:0 0 0 3px rgba(231,76,60,0.2) !important; }
 .campo-input:focus { border-color: var(--azul2); background: #fff; box-shadow: 0 0 0 3px rgba(26,58,110,0.1); }
 .campo-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .folio-display { font-family: "Courier New", monospace; font-size: 16px; font-weight: 700; color: var(--azul2); background: var(--gris); border: 1.5px solid var(--borde); border-radius: 8px; padding: 11px 13px; display: block; letter-spacing: 1px; }
@@ -803,6 +805,10 @@ function calcTotals() {
 }
 
 function renderItems() {
+  var activo = document.activeElement, contF = document.getElementById('items-container');
+  // Quitar el foco ANTES de reemplazar el HTML: si se quita durante el
+  // reemplazo, el onchange del campo redibuja a mitad de camino y falla.
+  if (activo && contF && contF.contains(activo)) activo.blur();
   var t = calcTotals();
   var cont = document.getElementById('items-container');
   cont.innerHTML = items.map(function(it, i) {
@@ -839,8 +845,83 @@ function renderItems() {
 var sigDataURL = '';
 
 // ── PASOS ──
+// ── FIX-009: VALIDACIÓN DE CAMPOS OBLIGATORIOS POR PASO ──
+// Paso 1: fecha y comandante. Paso 2: al menos un ítem; cada ítem usado
+// necesita descripción, cantidad > 0 y precio > 0. Firma (nombre, grado,
+// cargo y trazo): solo para imprimir; guardar sin firma queda como borrador.
+function marcarError(el, hayError) {
+  if (!el) return;
+  if (hayError) el.classList.add('campo-error'); else el.classList.remove('campo-error');
+}
+function validarPaso(n) {
+  var faltan = [], primero = null;
+  function revisar(el, ok, nombre) {
+    marcarError(el, !ok);
+    if (!ok) { faltan.push(nombre); if (!primero) primero = el; }
+  }
+  if (n === 1) {
+    var f = document.getElementById('fecha'), c = document.getElementById('cdte');
+    revisar(f, !!f.value, 'Fecha');
+    revisar(c, c.value.trim() !== '', 'Comandante');
+  }
+  if (n === 2) {
+    var cards = document.querySelectorAll('#items-container .item-card');
+    var usados = 0;
+    items.forEach(function(it, i){
+      var inp = cards[i] ? cards[i].querySelectorAll('input') : [];
+      var desc = String(it.descripcion || '').trim();
+      var usado = desc !== '' || (parseFloat(it.pUnitario) || 0) > 0;
+      if (!usado) { [0,2,3].forEach(function(k){ marcarError(inp[k], false); }); return; }
+      usados++;
+      revisar(inp[2], desc !== '', 'Descripción ítem ' + (i+1));
+      revisar(inp[0], (parseFloat(it.cant) || 0) > 0, 'Cantidad ítem ' + (i+1));
+      revisar(inp[3], (parseFloat(it.pUnitario) || 0) > 0, 'Precio ítem ' + (i+1));
+    });
+    if (usados === 0) {
+      faltan.push('al menos un ítem con descripción');
+      var d = cards[0] ? cards[0].querySelectorAll('input')[2] : null;
+      marcarError(d, true); if (!primero) primero = d;
+    }
+  }
+  if (n === 3) {
+    ['firma-nombre','firma-grado','firma-cargo'].forEach(function(id){
+      var el = document.getElementById(id);
+      revisar(el, el && el.value.trim() !== '', {'firma-nombre':'Nombre','firma-grado':'Grado','firma-cargo':'Cargo'}[id]);
+    });
+    var sc = document.getElementById('sig-canvas');
+    var hayTrazo = firmaTieneTrazo();
+    if (sc) { if (hayTrazo) sc.classList.remove('sig-error'); else sc.classList.add('sig-error'); }
+    if (!hayTrazo) { faltan.push('Firma a mano'); if (!primero) primero = sc; }
+  }
+  if (faltan.length) {
+    mostrarToast('⚠ Completa: ' + faltan.join(', '));
+    if (primero && primero.focus && primero.tagName !== 'CANVAS') { try { primero.focus(); } catch(e) {} }
+    else if (primero && primero.scrollIntoView) primero.scrollIntoView({ block: 'center' });
+  }
+  return faltan.length === 0;
+}
+// ¿Hay trazo en la firma? Busca píxeles oscuros (sirve para una firma
+// recién dibujada y para una restaurada como imagen con fondo blanco).
+function firmaTieneTrazo() {
+  var sc = document.getElementById('sig-canvas');
+  if (!sc || !sc.width || !sc.height) return false;
+  var d;
+  try { d = sc.getContext('2d').getImageData(0, 0, sc.width, sc.height).data; } catch(e) { return true; }
+  for (var i = 0; i < d.length; i += 16) {          // 1 de cada 4 píxeles basta
+    if (d[i+3] > 128 && d[i] < 128 && d[i+1] < 128 && d[i+2] < 128) return true;
+  }
+  return false;
+}
+// Al corregir un campo marcado, se quita la marca roja
+document.addEventListener('input', function(e){ if (e.target && e.target.classList) e.target.classList.remove('campo-error'); });
+document.addEventListener('change', function(e){ if (e.target && e.target.classList) e.target.classList.remove('campo-error'); });
+
 function irPaso(n) {
   if (n < 1 || n > 3) return;
+  // Avanzar exige que los pasos anteriores estén completos; retroceder, no.
+  if (n > pasoActual) {
+    for (var p = pasoActual; p < n; p++) { if (!validarPaso(p)) { if (p !== pasoActual) irPaso(p); return; } }
+  }
   if (n === 3) { actualizarResumen(); setTimeout(function(){ initCanvas(); if(sigDataURL) restaurarFirma(); }, 150); }
   if (pasoActual === 3 && n !== 3) { sigDataURL = capturarFirma(); }
   document.querySelectorAll('.step-panel').forEach(function(p){ p.classList.remove('activo'); });
@@ -863,6 +944,14 @@ function irPaso(n) {
     btnSig.onclick = function(){ irPaso(pasoActual+1); };
   }
   actualizarDisplayFolio();
+}
+
+function irPasoSinValidar(n) {
+  var previo = pasoActual;
+  if (previo === 3 && n !== 3) sigDataURL = capturarFirma();   // no perder la firma
+  pasoActual = 99;                            // trata el salto como retroceso
+  irPaso(n);
+  if (pasoActual === 99) pasoActual = previo;
 }
 
 function restaurarFirma() {
@@ -957,6 +1046,9 @@ function renderHistorial() {
 }
 
 function guardarHistorial() {
+  // Pasos 1 y 2 obligatorios para guardar; la firma no (borrador permitido)
+  if (!validarPaso(1)) { irPasoSinValidar(1); return; }
+  if (!validarPaso(2)) { irPasoSinValidar(2); return; }
   var t = calcTotals();
   var fecha = document.getElementById('fecha').value || new Date().toISOString().slice(0,10);
   var esc = document.getElementById('escuadrilla').value || '';
@@ -1051,8 +1143,13 @@ function cargarHistorial(i) {
   document.getElementById('firma-nombre').value = h.firmaNombre || '';
   document.getElementById('firma-grado').value = h.firmaGrado || '';
   document.getElementById('firma-cargo').value = h.firmaCargo || '';
-  items = h.items.map(function(it){ return Object.assign({},it); });
+  items = (h.items || []).map(function(it){ return Object.assign({},it); });
   renderItems();
+  // Firma guardada: se restaura en el canvas al entrar al Paso 3
+  sigDataURL = (h.firmaImg && h.firmaImg !== 'data:,') ? h.firmaImg : '';
+  var scl = document.getElementById('sig-canvas');
+  if (scl) { scl.getContext('2d').clearRect(0, 0, scl.width, scl.height); scl.classList.remove('sig-error'); }
+  document.querySelectorAll('.campo-error').forEach(function(el){ el.classList.remove('campo-error'); });
   volverDeHistorial();
   irPaso(1);
   mostrarToast('Solicitud '+folioEnPantalla()+' cargada');
@@ -1075,6 +1172,8 @@ function eliminarHistorial(i) {
 
 function nuevoFormulario() {
   editIndex = -1;
+  document.querySelectorAll('.campo-error').forEach(function(el){ el.classList.remove('campo-error'); });
+  var scn = document.getElementById('sig-canvas'); if (scn) scn.classList.remove('sig-error');
   sigDataURL = '';
   var sc = document.getElementById('sig-canvas');
   if (sc) sc.getContext('2d').clearRect(0, 0, sc.width, sc.height);
@@ -1097,6 +1196,11 @@ function nuevoFormulario() {
 
 // ── IMPRIMIR ──
 function imprimirPDF() {
+  // El PDF oficial exige datos, ítems y firma completa
+  if (!validarPaso(1)) { irPasoSinValidar(1); return; }
+  if (!validarPaso(2)) { irPasoSinValidar(2); return; }
+  if (pasoActual !== 3) irPasoSinValidar(3);
+  if (!validarPaso(3)) return;
   if (editIndex >= 0 && solicitudes[editIndex] && solicitudes[editIndex].folioAnterior) {
     delete solicitudes[editIndex].folioAnterior;
     saveLS();
@@ -1176,6 +1280,7 @@ function initCanvas() {
 
 function limpiarFirma() {
   var sc = document.getElementById('sig-canvas');
+  if (sc) sc.classList.remove('sig-error');
   if (sc) sc.getContext('2d').clearRect(0, 0, sc.width, sc.height);
   sigDataURL = '';
 }
@@ -1225,6 +1330,10 @@ function calcTotalsHistorico() {
 }
 
 function renderItemsHistorico() {
+  var activo = document.activeElement, contF = document.getElementById('mh-items-container');
+  // Quitar el foco ANTES de reemplazar el HTML: si se quita durante el
+  // reemplazo, el onchange del campo redibuja a mitad de camino y falla.
+  if (activo && contF && contF.contains(activo)) activo.blur();
   var t = calcTotalsHistorico();
   var cont = document.getElementById('mh-items-container');
   cont.innerHTML = itemsHistorico.map(function(it, i) {
