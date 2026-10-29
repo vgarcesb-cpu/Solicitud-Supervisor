@@ -227,6 +227,10 @@ body { font-family: "Segoe UI", Arial, sans-serif; font-size: 14px; background: 
           <label class="campo-label">URL del Worker</label>
           <input class="campo-input" id="ss-api-url" type="text" placeholder="https://supervisor-api.totis.cl">
         </div>
+        <div class="campo-group">
+          <label class="campo-label">Clave de sincronización</label>
+          <input class="campo-input" id="ss-api-key" type="password" maxlength="100" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Se escribe una vez por dispositivo">
+        </div>
         <button class="btn-agregar-hist" onclick="guardarApiUrl()">Guardar y probar conexión</button>
         <div id="ss-sync-status" style="font-size:12px;margin-top:8px;color:#888"></div>
         <button class="btn-agregar-hist" onclick="traerRespaldoNube()" style="margin-top:8px">⬇️ Traer respaldo desde la nube</button>
@@ -452,11 +456,20 @@ function urlSyncConfirmada() {
   try { return !!localStorage.getItem('ss_api_url'); } catch(e) { return false; }
 }
 
+// Clave de sincronización: se guarda solo en este dispositivo (nunca en el repo).
+function getApiKey() { try { return localStorage.getItem('ss_api_key') || ''; } catch(e) { return ''; } }
+function headersApi(extra) {
+  var h = extra || {};
+  var k = getApiKey();
+  if (k) h['Authorization'] = 'Bearer ' + k;
+  return h;
+}
+
 function intentarSyncRegistro(rec) {
   if (!urlSyncConfirmada() || !navigator.onLine) { marcarPendienteSync(rec.id); return; }
   fetch(API_URL + '/solicitudes', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: headersApi({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({
       folio_id: rec.id, folio_anio: rec.folioAnio, folio_num: rec.folioNum,
       folio_custom: rec.folioCustom || null, fecha: rec.fecha,
@@ -491,12 +504,25 @@ function guardarApiUrl() {
   // Campo vacío = usar la URL por defecto (el placeholder muestra la misma URL).
   var url = (campo.value.trim() || API_URL_DEFAULT).replace(/\/$/, '');
   campo.value = url;
+  var campoKey = document.getElementById('ss-api-key');
+  if (campoKey && campoKey.value.trim()) {
+    try { localStorage.setItem('ss_api_key', campoKey.value.trim()); } catch(e) {}
+  }
+  if (campoKey) campoKey.value = '';
   if (st) st.textContent = 'Probando conexión...';
-  fetch(url + '/health').then(function(r){ return r.json(); }).then(function(d){
+  fetch(url + '/health', { headers: headersApi() }).then(function(r){ return r.json(); }).then(function(d){
     if (d && d.ok) {
       API_URL = url;
       try { localStorage.setItem('ss_api_url', url); } catch(e) {}
-      if (st) st.innerHTML = '<span style="color:#2ecc71">✓ Conectado — ' + escHTML(d.app || '') + '</span>';
+      if (!st) { /* sin elemento de estado */ }
+      else if (d.auth === false) {
+        st.innerHTML = '<span style="color:#e67e22">⚠ Conectado, pero la clave ' + (getApiKey() ? 'no es válida' : 'falta') + '. El respaldo no funcionará.</span>';
+      } else {
+        st.innerHTML = '<span style="color:#2ecc71">✓ Conectado — ' + escHTML(d.app || '') + (d.auth === true ? ' · clave correcta' : '') + '</span>';
+      }
+      var ekp = document.getElementById('ss-api-key');
+      if (ekp) ekp.placeholder = getApiKey() ? '•••••••• (clave guardada; escribe otra para cambiarla)' : 'Se escribe una vez por dispositivo';
+      actualizarSyncDot();
       reintentarSyncPendientes();
     } else {
       if (st) st.innerHTML = '<span style="color:#e74c3c">✗ Respuesta inesperada del Worker</span>';
@@ -516,7 +542,7 @@ function traerRespaldoNube() {
     return;
   }
   if (st) st.textContent = 'Descargando respaldo...';
-  fetch(API_URL + '/solicitudes').then(function(r){ return r.json(); }).then(function(resp){
+  fetch(API_URL + '/solicitudes', { headers: headersApi() }).then(function(r){ if (r.status === 401) throw new Error('clave de sincronización inválida o faltante'); return r.json(); }).then(function(resp){
     if (!resp || !resp.ok || !Array.isArray(resp.data)) throw new Error('Respuesta inválida del Worker');
     var traidos = 0, actualizados = 0;
     resp.data.forEach(function(r){
@@ -542,6 +568,8 @@ function traerRespaldoNube() {
 function actualizarEstadoSyncUI() {
   var el = document.getElementById('ss-api-url');
   if (el && API_URL) el.value = API_URL;
+  var ek = document.getElementById('ss-api-key');
+  if (ek) ek.placeholder = getApiKey() ? '•••••••• (clave guardada; escribe otra para cambiarla)' : 'Se escribe una vez por dispositivo';
   var st = document.getElementById('ss-sync-status');
   if (!st) return;
   var pend = listaPendientesSync().length;
@@ -572,7 +600,7 @@ function actualizarSyncDot() {
   if (!dot) return;
   var urlConfirmada = false;
   try { urlConfirmada = !!localStorage.getItem('ss_api_url'); } catch(e) {}
-  if (!urlConfirmada) { dot.style.background = '#888'; return; }
+  if (!urlConfirmada || !getApiKey()) { dot.style.background = '#888'; return; }
   var pend = listaPendientesSync().length;
   dot.style.background = pend > 0 ? '#c8a84b' : '#2ecc71';
 }
@@ -606,7 +634,7 @@ var verificandoFolio = false;
 function verificarFolioNube() {
   if (verificandoFolio || !urlSyncConfirmada() || !navigator.onLine) return;
   verificandoFolio = true;
-  fetch(API_URL + '/solicitudes').then(function(r){ return r.json(); }).then(function(resp){
+  fetch(API_URL + '/solicitudes', { headers: headersApi() }).then(function(r){ if (r.status === 401) throw new Error('clave de sincronización inválida o faltante'); return r.json(); }).then(function(resp){
     if (!resp || !resp.ok || !Array.isArray(resp.data)) return;
     var anio = new Date().getFullYear().toString();
     var maxNube = 0;
@@ -928,7 +956,7 @@ function eliminarHistorial(i) {
   solicitudes.splice(i, 1);
   saveLS();
   if (folioId && urlSyncConfirmada() && navigator.onLine) {
-    fetch(API_URL + '/solicitudes/' + encodeURIComponent(folioId), { method: 'DELETE' }).catch(function(){});
+    fetch(API_URL + '/solicitudes/' + encodeURIComponent(folioId), { method: 'DELETE', headers: headersApi() }).catch(function(){});
   }
   renderHistorial();
 }
