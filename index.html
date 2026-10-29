@@ -133,6 +133,7 @@ body { font-family: "Segoe UI", Arial, sans-serif; font-size: 14px; background: 
 .modal-overlay.activo { opacity:1; pointer-events:all; }
 .modal-sheet { background:#fff; border-radius:18px 18px 0 0; width:100%; max-height:88vh; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:20px 16px 32px; transform:translateY(100%); transition:transform 0.3s ease; }
 .modal-overlay.activo .modal-sheet { transform:translateY(0); }
+.btn-modal-sec { width:100%; margin-top:8px; padding:12px; background:#fff; color:var(--azul2); border:1.5px solid var(--azul2); border-radius:10px; font-size:14px; font-weight:600; cursor:pointer; font-family:inherit; }
 .modal-titulo { font-size:14px; font-weight:700; color:var(--azul2); text-transform:uppercase; letter-spacing:1px; border-bottom:2px solid var(--dorado); padding-bottom:8px; margin-bottom:16px; }
 .btn-modal-guardar { width:100%; padding:14px; background:linear-gradient(135deg,var(--dorado),var(--dorado2)); color:#fff; border:none; border-radius:10px; font-size:15px; font-weight:700; cursor:pointer; font-family:inherit; margin-top:12px; }
 .btn-modal-cancelar { width:100%; padding:10px; background:transparent; color:#999; border:1px solid #ddd; border-radius:8px; font-size:13px; cursor:pointer; font-family:inherit; margin-top:8px; }
@@ -346,6 +347,18 @@ body { font-family: "Segoe UI", Arial, sans-serif; font-size: 14px; background: 
 </div>
 
 <!-- TOAST -->
+<!-- MODAL POST-GUARDADO -->
+<div class="modal-overlay" id="modal-guardado" onclick="if(event.target===this)cerrarModalGuardado()">
+  <div class="modal-sheet">
+    <div class="modal-titulo">✓ Solicitud guardada</div>
+    <div id="mg-folio" style="font-family:monospace;font-size:20px;font-weight:700;color:var(--azul2);text-align:center;margin:8px 0 4px"></div>
+    <div id="mg-sync" style="font-size:12px;color:#888;text-align:center;margin-bottom:6px"></div>
+    <div style="font-size:12px;color:#555;text-align:center;margin-bottom:14px">La solicitud sigue en pantalla. Para empezar otra, usa "+ Nueva solicitud".</div>
+    <button class="btn-pdf" onclick="cerrarModalGuardado();imprimirPDF()">🖨️ Imprimir PDF</button>
+    <button class="btn-modal-sec" onclick="cerrarModalGuardado();nuevoFormulario()">+ Nueva solicitud</button>
+    <button class="btn-modal-sec" onclick="cerrarModalGuardado()">Seguir viendo esta solicitud</button>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
 
 <!-- PRINT AREA -->
@@ -659,8 +672,15 @@ function getFolioContador() { try { return parseInt(localStorage.getItem('fach_f
 function setFolioContador(n) { try { localStorage.setItem('fach_folio', String(n)); } catch(e) {} }
 function folioStr(n) { return String(n).padStart(4,'0'); }
 function folioCompleto() { return 'ADQ-' + folioAnioActual + '-' + folioStr(folioNumActual); }
+// Folio en pantalla e impresión: si hay un registro abierto, su folio real
+// (incluye folios de papel como 'PAPEL-77'); si no, el próximo folio.
+function folioEnPantalla() {
+  var r = (editIndex >= 0) ? solicitudes[editIndex] : null;
+  if (r && r.folioCustom) return r.folioCustom;
+  return folioCompleto();
+}
 function actualizarDisplayFolio() {
-  var fc = folioCompleto();
+  var fc = folioEnPantalla();
   var el = document.getElementById('folio-display');
   if (el) el.textContent = fc;
   var fs = document.getElementById('folio-show');
@@ -692,8 +712,10 @@ function sincronizarFolioContador() {
     }
   });
   setFolioContador(maxNum);
-  folioNumActual = maxNum + 1;
-  folioAnioActual = parseInt(anioActual);
+  if (editIndex < 0) {               // con un registro abierto, su folio no cambia
+    folioNumActual = maxNum + 1;
+    folioAnioActual = parseInt(anioActual);
+  }
   actualizarDisplayFolio();
   var st = document.getElementById('ss-sync-folio-status');
   if (st) st.innerHTML = '<span style="color:#2ecc71">✓ Próximo folio: ADQ-' + anioActual + '-' + folioStr(maxNum + 1) + '</span>';
@@ -880,7 +902,7 @@ function actualizarResumen() {
   var esc = document.getElementById('escuadrilla').value;
   var cdte = document.getElementById('cdte').value;
   var obs = document.getElementById('observaciones').value;
-  var fc = folioCompleto();
+  var fc = folioEnPantalla();
 
   var datos = document.getElementById('resumen-datos');
   datos.innerHTML = [
@@ -980,36 +1002,38 @@ function guardarHistorial() {
   intentarSyncRegistro(rec);
 
   var folioGuardado = rec.folioCustom || rec.id;
-  var eraEdicion = (editIndex >= 0);
-  editIndex = -1;
-  mostrarToast('✓ Guardado: ' + folioGuardado);
 
-  setTimeout(function(){
-    sigDataURL = '';
-    // Incrementar contador solo si no era edición de un registro existente
-    if (!eraEdicion) {
+  // La pantalla NO se limpia al guardar (se limpia solo con "+ Nuevo").
+  // La solicitud queda abierta en modo edición: guardar otra vez la
+  // actualiza, no crea un duplicado con otro folio.
+  if (editIndex < 0) {
+    if (String(folioAnioActual) === new Date().getFullYear().toString() && folioNumActual > getFolioContador()) {
       setFolioContador(folioNumActual);
-      folioNumActual = getFolioContador() + 1;
-      folioAnioActual = new Date().getFullYear();
-    } else {
-      // Era edición: no avanzar el contador guardado, pero sí dejar
-      // el formulario listo apuntando al siguiente folio disponible
-      folioNumActual = getFolioContador() + 1;
-      folioAnioActual = new Date().getFullYear();
     }
-    document.getElementById('fecha').value = new Date().toISOString().slice(0,10);
-    document.getElementById('escuadrilla').value = 'Bandada Instalaciones';
-    document.getElementById('cdte').value = '';
-    document.getElementById('observaciones').value = '';
-    document.getElementById('firma-nombre').value = '';
-    document.getElementById('firma-grado').value = '';
-    document.getElementById('firma-cargo').value = '';
-    items = [];
-    agregarItem();
-    actualizarDisplayFolio();
-    irPaso(1);
-    verificarFolioNube();
-  }, 1000);
+    editIndex = solicitudes.indexOf(rec);
+  }
+  sigDataURL = capturarFirma();
+  actualizarDisplayFolio();
+  renderHistorial();
+  mostrarModalGuardado(folioGuardado);
+  verificarFolioNube();
+}
+
+// Modal post-guardado: confirma el folio sin cambiar de pantalla
+// (evita la pantalla en blanco del S25/S26 al volver de otra vista).
+function mostrarModalGuardado(folio) {
+  var m = document.getElementById('modal-guardado');
+  if (!m) { mostrarToast('✓ Guardado: ' + folio); return; }
+  document.getElementById('mg-folio').textContent = folio;
+  var enCola = listaPendientesSync().indexOf(folio) !== -1 || !navigator.onLine;
+  document.getElementById('mg-sync').textContent = enCola
+    ? 'Se respaldará en la nube cuando haya señal.'
+    : 'Enviada al respaldo en la nube.';
+  m.classList.add('activo');
+}
+function cerrarModalGuardado() {
+  var m = document.getElementById('modal-guardado');
+  if (m) m.classList.remove('activo');
 }
 
 function cargarHistorial(i) {
@@ -1031,7 +1055,7 @@ function cargarHistorial(i) {
   renderItems();
   volverDeHistorial();
   irPaso(1);
-  mostrarToast('Solicitud '+folioCompleto()+' cargada');
+  mostrarToast('Solicitud '+folioEnPantalla()+' cargada');
 }
 
 function eliminarHistorial(i) {
@@ -1078,7 +1102,7 @@ function imprimirPDF() {
     saveLS();
   }
   var t = calcTotals();
-  document.getElementById('p-folio').textContent = folioCompleto();
+  document.getElementById('p-folio').textContent = folioEnPantalla();
   document.getElementById('p-fecha').textContent = fmtFecha(document.getElementById('fecha').value);
   document.getElementById('p-escuadrilla').textContent = document.getElementById('escuadrilla').value;
   document.getElementById('p-cdte').textContent = document.getElementById('cdte').value || '—';
@@ -1109,7 +1133,7 @@ function imprimirPDF() {
     });
     tbody.appendChild(tr);
   });
-  setTimeout(function(){ window.print(); }, 200);
+  setTimeout(function(){ window.print(); }, 700);
 }
 
 // ── TOAST ──

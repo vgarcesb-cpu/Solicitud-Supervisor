@@ -10,14 +10,14 @@ La app funciona sin internet. `localStorage` es la fuente de verdad. Cuando hay 
 
 ## Qué hace
 
-- Flujo de 3 pasos (Datos, Materiales, Resumen) con validación por paso.
+- Flujo de 3 pasos (Datos, Materiales, Resumen). Los campos obligatorios todavía no se validan (pendiente).
 - Folio automático `ADQ-AAAA-NNNN`. Los folios de papel antiguos se cargan como registros históricos.
 - Firma en canvas con dedo o mouse, pensada para el Samsung S25/S26.
 - PDF con membrete institucional FACH.
 - Historial local con edición en el flujo completo.
+- Al guardar, la solicitud queda en pantalla y un modal confirma el folio. El formulario se limpia solo con "+ Nuevo".
 - Respaldo en la nube con clave de sincronización e indicador en el encabezado: verde (todo respaldado), dorado (pendiente), gris (sin URL o sin clave).
 - Detección de folios repetidos entre dispositivos. Si el Mac y el teléfono crean el mismo folio sin señal, la solicitud que sincroniza después pasa al folio siguiente y queda marcada para reimprimir.
-- Export / Import JSON como respaldo manual.
 - Se instala como app en Android y abre sin señal.
 
 ## Archivos

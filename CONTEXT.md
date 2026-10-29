@@ -41,7 +41,11 @@ Campos de cada solicitud que no son del formulario: `id` (folio), `uid` (huella 
 
 1. Paso 1, Datos: folio automático `ADQ-AAAA-NNNN`, fecha, escuadrilla, comandante y observaciones. Al final está la tarjeta "Respaldo en la nube".
 2. Paso 2, Materiales: ítems con cantidad, unidad, descripción y precio. Calcula subtotal, IVA 19 % y total.
-3. Paso 3, Resumen: firma (nombre, grado, cargo y canvas), "Guardar / Imprimir PDF" y "Guardar en historial".
+3. Paso 3, Resumen: firma (nombre, grado, cargo y canvas), "Guardar / Imprimir PDF" y "Guardar en historial". "Guardar / Imprimir PDF" solo imprime; no guarda en el historial.
+
+Al guardar, la pantalla no se limpia. La solicitud queda abierta en modo edición y aparece un modal con el folio, el estado del respaldo y tres botones: "Imprimir PDF", "+ Nueva solicitud" y "Seguir viendo esta solicitud". Guardar otra vez actualiza la misma solicitud. El formulario se limpia solo con "+ Nuevo" (barra inferior del Paso 3) o "+ Nueva solicitud" (modal). La impresión espera 700 ms antes de abrir el diálogo.
+
+El encabezado, el resumen y el PDF muestran el folio del registro abierto, incluido el folio de papel de un histórico. "Traer respaldo" y "Sincronizar próximo folio" no cambian ese folio; solo ajustan el contador para la próxima solicitud.
 
 Historial: lista de solicitudes con Editar y Eliminar, "+ Agregar Registro Antiguo" para folios de papel y "Sincronizar próximo folio". Editar abre el flujo completo de 3 pasos, también para los históricos.
 
@@ -124,6 +128,9 @@ Todo cambio pasa por tres etapas: Mac, después GitHub y Cloudflare, y al final 
 6. Worker v1.4 y columna `uid`: los folios repetidos entre dispositivos ya no se pisan.
 7. Editar un registro conserva folio, `uid`, folio de papel y marca HISTÓRICO. Antes un histórico perdía la marca y un folio de papel sin formato pasaba a 0001.
 8. "Traer respaldo" ya no borra ediciones locales pendientes.
+9. La pantalla no se limpia al guardar: la solicitud queda abierta en edición y un modal confirma el folio. Guardar dos veces ya no puede crear un duplicado.
+10. Impresión a los 700 ms (antes 200 ms).
+11. Encabezado, resumen y PDF usan el folio del registro abierto. Antes, "Traer respaldo" podía cambiar el folio mostrado y un histórico de papel se imprimía como `ADQ-AAAA-0000`.
 
 23 y 24-jun-2026: `id` asignado al guardar, reintento ante error de servidor, históricos en el flujo completo, tarjeta de respaldo movida al Paso 1 e indicador de sincronización.
 
@@ -137,5 +144,6 @@ Todo cambio pasa por tres etapas: Mac, después GitHub y Cloudflare, y al final 
 
 ## Pendiente
 
-- No limpiar la pantalla al guardar: hoy, un segundo después de guardar, el formulario se vacía y pasa al folio siguiente. La regla es que solo se limpie con "+ Nuevo".
 - La fila `api_worker_url` de la tabla `configuracion` en D1 todavía dice la URL `workers.dev`. La app no la usa. Se corrige con un `UPDATE` cuando convenga.
+- Export / Import JSON como respaldo manual. El README anterior lo mencionaba, pero la app no lo tiene.
+- Validación de campos obligatorios por paso (FIX-009). Hoy solo el modal de registro histórico valida; el flujo de 3 pasos deja avanzar y guardar sin escuadrilla ni ítems.
