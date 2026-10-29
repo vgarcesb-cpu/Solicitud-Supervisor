@@ -465,8 +465,15 @@ function headersApi(extra) {
   return h;
 }
 
+// Huella única de cada solicitud nueva (detecta folios repetidos entre dispositivos)
+function nuevoUid() {
+  try { if (window.crypto && crypto.randomUUID) return crypto.randomUUID(); } catch(e) {}
+  return 'u' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
+}
+
 function intentarSyncRegistro(rec) {
   if (!urlSyncConfirmada() || !navigator.onLine) { marcarPendienteSync(rec.id); return; }
+  var idEnviado = rec.id;
   fetch(API_URL + '/solicitudes', {
     method: 'POST',
     headers: headersApi({ 'Content-Type': 'application/json' }),
@@ -475,12 +482,60 @@ function intentarSyncRegistro(rec) {
       folio_custom: rec.folioCustom || null, fecha: rec.fecha,
       escuadrilla: rec.escuadrilla, cdte: rec.cdte, observaciones: rec.observaciones,
       firma_nombre: rec.firmaNombre, firma_grado: rec.firmaGrado, firma_cargo: rec.firmaCargo,
-      firma_img: rec.firmaImg, items: rec.items, total: rec.total, es_historico: !!rec.esHistorico
+      firma_img: rec.firmaImg, items: rec.items, total: rec.total, es_historico: !!rec.esHistorico,
+      uid: rec.uid || null
     })
   }).then(function(r){
-    if (r.ok) quitarPendienteSync(rec.id);
-    else marcarPendienteSync(rec.id);
-  }).catch(function(){ marcarPendienteSync(rec.id); });
+    if (r.ok) { quitarPendienteSync(idEnviado); return; }
+    if (r.status === 409) {
+      return r.json().then(function(d){ resolverConflictoFolio(rec, idEnviado, d); },
+                           function(){ marcarPendienteSync(idEnviado); });
+    }
+    marcarPendienteSync(idEnviado);
+  }).catch(function(){ marcarPendienteSync(idEnviado); });
+}
+
+// El folio ya lo ocupa OTRA solicitud en la nube (creada en otro dispositivo
+// sin señal). La que sincronizó primero conserva el número. Esta pasa al
+// siguiente folio libre y queda marcada para reimprimir. Los registros
+// históricos de papel y los antiguos (sin uid) nunca se renumeran: se marcan
+// como conflicto para revisión manual.
+function resolverConflictoFolio(rec, idEnviado, d) {
+  if (!rec || rec.id !== idEnviado) return;            // ya resuelto por otra respuesta
+  var idx = solicitudes.indexOf(rec);
+  if (idx < 0) idx = solicitudes.findIndex(function(s){ return s && s.id === idEnviado && (s.uid || '') === (rec.uid || ''); });
+  if (idx < 0) return;
+  var actual = solicitudes[idx];
+  quitarPendienteSync(idEnviado);
+
+  if (!actual.uid || actual.esHistorico || actual.folioCustom) {
+    actual.conflictoNube = true;
+    saveLS(); renderHistorial(); actualizarSyncDot();
+    mostrarToast('⚠ ' + idEnviado + ': la nube ya tiene otra solicitud con ese folio. Revisa el historial.');
+    return;
+  }
+
+  var anio = String(actual.folioAnio);
+  var esteAnio = anio === new Date().getFullYear().toString();
+  var n = Math.max(parseInt(d && d.max_num, 10) || 0,
+                   parseInt(actual.folioNum, 10) || 0,
+                   esteAnio ? getFolioContador() : 0) + 1;
+  while (solicitudes.some(function(s){ return s && s.id === 'ADQ-' + anio + '-' + folioStr(n); })) n++;
+
+  if (!actual.folioAnterior) actual.folioAnterior = idEnviado;   // el folio que se imprimió
+  actual.folioNum = folioStr(n);
+  actual.id = 'ADQ-' + anio + '-' + actual.folioNum;
+  delete actual.conflictoNube;
+  if (esteAnio && n > getFolioContador()) setFolioContador(n);
+  saveLS();
+
+  if (editIndex === idx) { folioNumActual = n; actualizarDisplayFolio(); }
+  else if (editIndex < 0 && esteAnio && String(folioAnioActual) === anio && folioNumActual <= n) {
+    folioNumActual = n + 1; actualizarDisplayFolio();
+  }
+  renderHistorial();
+  mostrarToast('⚠ El folio ' + idEnviado + ' ya existía en la nube. Esta solicitud pasó a ' + actual.id + '. Reimprímela.');
+  intentarSyncRegistro(actual);
 }
 
 // Recorre pendientes y reintenta. Se llama al recuperar señal.
@@ -544,7 +599,8 @@ function traerRespaldoNube() {
   if (st) st.textContent = 'Descargando respaldo...';
   fetch(API_URL + '/solicitudes', { headers: headersApi() }).then(function(r){ if (r.status === 401) throw new Error('clave de sincronización inválida o faltante'); return r.json(); }).then(function(resp){
     if (!resp || !resp.ok || !Array.isArray(resp.data)) throw new Error('Respuesta inválida del Worker');
-    var traidos = 0, actualizados = 0;
+    var traidos = 0, actualizados = 0, conservados = 0;
+    var pend = listaPendientesSync();
     resp.data.forEach(function(r){
       var rec = {
         id: r.folio_id, folioAnio: r.folio_anio, folioNum: r.folio_num, folioCustom: r.folio_custom || null,
@@ -552,14 +608,30 @@ function traerRespaldoNube() {
         firmaNombre: r.firma_nombre, firmaGrado: r.firma_grado, firmaCargo: r.firma_cargo, firmaImg: r.firma_img,
         items: r.items || [], total: r.total, esHistorico: !!r.es_historico
       };
+      if (r.uid) rec.uid = r.uid;
       var idx = solicitudes.findIndex(function(s){ return s.id === rec.id; });
-      if (idx >= 0) { solicitudes[idx] = rec; actualizados++; }
+      if (idx >= 0) {
+        var loc = solicitudes[idx];
+        // Cambio local aún sin subir: se conserva (se subirá después)
+        if (pend.indexOf(loc.id) !== -1) { conservados++; return; }
+        // Mismo folio pero OTRA solicitud: no se pisa la local
+        if ((loc.uid || '') !== (rec.uid || '')) {
+          conservados++;
+          if (loc.uid && !loc.esHistorico && !loc.folioCustom) marcarPendienteSync(loc.id); // se renumerará al subir
+          else loc.conflictoNube = true;
+          return;
+        }
+        if (loc.folioAnterior) rec.folioAnterior = loc.folioAnterior;
+        solicitudes[idx] = rec; actualizados++;
+      }
       else { solicitudes.push(rec); traidos++; }
     });
     saveLS();
+    if (conservados) reintentarSyncPendientes();
     sincronizarFolioContador();
     renderHistorial();
-    if (st) st.innerHTML = '<span style="color:#2ecc71">✓ ' + traidos + ' nuevo(s), ' + actualizados + ' actualizado(s)</span>';
+    if (st) st.innerHTML = '<span style="color:#2ecc71">✓ ' + traidos + ' nuevo(s), ' + actualizados + ' actualizado(s)' +
+      (conservados ? ', ' + conservados + ' conservado(s) del dispositivo' : '') + '</span>';
   }).catch(function(e){
     if (st) st.innerHTML = '<span style="color:#e74c3c">✗ Error: ' + escHTML(e.message) + '</span>';
   });
@@ -844,6 +916,8 @@ function renderHistorial() {
     // Si tiene folio personalizado (registro histórico), mostrarlo tal cual
     var folioMostrar = h.folioCustom ? escHTML(h.folioCustom) : 'ADQ-'+escHTML(h.folioAnio)+'-'+escHTML(h.folioNum);
     var badgeHist = h.esHistorico ? '<span style="font-size:9px;background:#f0e6cc;color:#a07830;border-radius:4px;padding:1px 5px;margin-left:6px;font-weight:700">HISTÓRICO</span>' : '';
+    if (h.folioAnterior) badgeHist += '<span style="font-size:9px;background:#fde2e1;color:#c0392b;border-radius:4px;padding:1px 5px;margin-left:6px;font-weight:700">REASIGNADO · antes '+escHTML(h.folioAnterior)+' · reimprimir</span>';
+    if (h.conflictoNube) badgeHist += '<span style="font-size:9px;background:#fde2e1;color:#c0392b;border-radius:4px;padding:1px 5px;margin-left:6px;font-weight:700">CONFLICTO EN LA NUBE</span>';
     var nItems = h.items && h.items.length > 0 ? h.items.length+' ítem(s)' : 'registro manual';
     return '<div class="hist-item-app" onclick="cargarHistorial('+i+')">' +
       '<div style="display:flex;justify-content:space-between;align-items:center">' +
@@ -887,16 +961,25 @@ function guardarHistorial() {
   };
 
   if (editIndex >= 0) {
-    rec.id = solicitudes[editIndex].id || rec.id;
+    // Editar nunca cambia el folio ni la identidad del registro
+    var orig = solicitudes[editIndex];
+    rec.id = orig.id || rec.id;
+    if (orig.folioAnio) rec.folioAnio = orig.folioAnio;
+    if (orig.folioNum) rec.folioNum = orig.folioNum;
+    if (orig.uid) rec.uid = orig.uid;
+    if (orig.folioCustom) rec.folioCustom = orig.folioCustom;
+    if (orig.esHistorico) rec.esHistorico = true;
+    if (orig.folioAnterior) rec.folioAnterior = orig.folioAnterior;
     solicitudes[editIndex] = rec;
   } else {
+    rec.uid = nuevoUid();
     solicitudes.push(rec);
   }
 
   saveLS();
   intentarSyncRegistro(rec);
 
-  var folioGuardado = folioCompleto();
+  var folioGuardado = rec.folioCustom || rec.id;
   var eraEdicion = (editIndex >= 0);
   editIndex = -1;
   mostrarToast('✓ Guardado: ' + folioGuardado);
@@ -953,10 +1036,15 @@ function cargarHistorial(i) {
 
 function eliminarHistorial(i) {
   var folioId = solicitudes[i] ? solicitudes[i].id : null;
+  var uidDel = solicitudes[i] ? (solicitudes[i].uid || '') : '';
+  var enConflicto = solicitudes[i] && solicitudes[i].conflictoNube;
   solicitudes.splice(i, 1);
   saveLS();
-  if (folioId && urlSyncConfirmada() && navigator.onLine) {
-    fetch(API_URL + '/solicitudes/' + encodeURIComponent(folioId), { method: 'DELETE', headers: headersApi() }).catch(function(){});
+  if (folioId) quitarPendienteSync(folioId);
+  // Un registro en conflicto nunca llegó a la nube: no se borra lo que hay allá
+  if (folioId && !enConflicto && urlSyncConfirmada() && navigator.onLine) {
+    fetch(API_URL + '/solicitudes/' + encodeURIComponent(folioId) + '?uid=' + encodeURIComponent(uidDel),
+          { method: 'DELETE', headers: headersApi() }).catch(function(){});
   }
   renderHistorial();
 }
@@ -985,6 +1073,10 @@ function nuevoFormulario() {
 
 // ── IMPRIMIR ──
 function imprimirPDF() {
+  if (editIndex >= 0 && solicitudes[editIndex] && solicitudes[editIndex].folioAnterior) {
+    delete solicitudes[editIndex].folioAnterior;
+    saveLS();
+  }
   var t = calcTotals();
   document.getElementById('p-folio').textContent = folioCompleto();
   document.getElementById('p-fecha').textContent = fmtFecha(document.getElementById('fecha').value);
@@ -1187,6 +1279,7 @@ function guardarHistorico() {
   };
 
   if (editIndex >= 0) {
+    if (solicitudes[editIndex] && solicitudes[editIndex].uid) rec.uid = solicitudes[editIndex].uid;
     solicitudes[editIndex] = rec;
     editIndex = -1;
     mostrarToast('✓ Registro histórico actualizado');

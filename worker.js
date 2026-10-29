@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════
-// worker.js — Solicitud Adquisición Supervisor (AGA FACH) v1.3
+// worker.js — Solicitud Adquisición Supervisor (AGA FACH) v1.4
 // Modelo HÍBRIDO offline-first: este Worker es respaldo/sync,
 // nunca fuente de verdad. El frontend sigue funcionando 100%
 // offline con localStorage; esto solo sincroniza cuando hay señal.
@@ -16,6 +16,16 @@
 //       - Validación y límites de tamaño en POST; ítems normalizados.
 //         Firma: data URL JPEG o PNG (la app guarda JPEG).
 //       - Sin SYNC_KEY configurado, las rutas de datos quedan cerradas.
+// v1.4 (29-oct-2026, conflictos de folio):
+//       - Columna uid: huella única de cada solicitud nueva, creada en
+//         el dispositivo. Requiere en D1 (una vez):
+//           ALTER TABLE solicitudes ADD COLUMN uid TEXT;
+//       - POST solo actualiza un folio existente si el uid coincide
+//         (comprobación atómica en el mismo UPSERT). Si no coincide
+//         responde 409 { error:'conflicto_folio', max_num } y no pisa nada.
+//       - DELETE /solicitudes/:id?uid=... solo borra si el uid coincide.
+//       - Registros sin uid (antiguos e históricos de papel) siguen como
+//         antes entre ellos: el último que escribe gana.
 // ═══════════════════════════════════════════════════════
 
 const ORIGENES_PERMITIDOS = [
@@ -25,6 +35,15 @@ const ORIGENES_PERMITIDOS = [
 const MAX_BODY_BYTES   = 1500000;  // 1,5 MB por solicitud
 const MAX_FIRMA_CHARS  = 1000000;  // data URL PNG de la firma
 const MAX_ITEMS        = 200;
+const RE_UID           = /^[A-Za-z0-9-]{8,64}$/;
+
+// Folio más alto usado en un año (para que el dispositivo se renumere)
+async function maxFolioAnio(env, anio) {
+  const row = await env.DB.prepare(
+    `SELECT MAX(CAST(folio_num AS INTEGER)) AS m FROM solicitudes WHERE folio_anio = ?`
+  ).bind(String(anio || '')).first();
+  return (row && row.m) || 0;
+}
 
 function corsHeaders(origin) {
   const headers = {
@@ -80,6 +99,7 @@ function validarSolicitud(b) {
   if (b.firma_img && b.firma_img !== 'data:,' && (typeof b.firma_img !== 'string' ||
       !/^data:image\/(jpeg|png);base64,[A-Za-z0-9+/=]+$/.test(b.firma_img) ||
       b.firma_img.length > MAX_FIRMA_CHARS)) return 'firma_img inválida';
+  if (b.uid && (typeof b.uid !== 'string' || !RE_UID.test(b.uid))) return 'uid inválido';
   if (b.items !== undefined && b.items !== null && !Array.isArray(b.items)) return 'items inválido';
   if (Array.isArray(b.items) && b.items.length > MAX_ITEMS) return 'demasiados ítems';
   return null;
@@ -138,13 +158,17 @@ export default {
         if (err) return json({ error: err }, 400, origin);
 
         const items = normalizarItems(body.items);
+        const uid = body.uid || null;
 
-        await env.DB.prepare(`
+        // Si el folio ya existe, solo se actualiza cuando el uid coincide
+        // (NULL = registro antiguo/histórico). Si no coincide, no se escribe
+        // nada (changes = 0) y se responde 409. Todo en una sola instrucción.
+        const res = await env.DB.prepare(`
           INSERT INTO solicitudes
             (folio_id, folio_anio, folio_num, folio_custom, fecha, escuadrilla, cdte,
              observaciones, firma_nombre, firma_grado, firma_cargo, firma_img,
-             items_json, total, es_historico, actualizado_en)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+             items_json, total, es_historico, uid, actualizado_en)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
           ON CONFLICT(folio_id) DO UPDATE SET
             folio_anio=excluded.folio_anio,
             folio_num=excluded.folio_num,
@@ -161,6 +185,7 @@ export default {
             total=excluded.total,
             es_historico=excluded.es_historico,
             actualizado_en=datetime('now')
+          WHERE COALESCE(solicitudes.uid, '') = COALESCE(excluded.uid, '')
         `).bind(
           body.folio_id,
           texto(body.folio_anio, 4), texto(body.folio_num, 6),
@@ -169,8 +194,16 @@ export default {
           texto(body.escuadrilla, 100), texto(body.cdte, 100), texto(body.observaciones, 300),
           texto(body.firma_nombre, 100), texto(body.firma_grado, 50), texto(body.firma_cargo, 100),
           (body.firma_img && body.firma_img !== 'data:,') ? body.firma_img : '',
-          JSON.stringify(items), numero(body.total, 0, 1e15), body.es_historico ? 1 : 0
+          JSON.stringify(items), numero(body.total, 0, 1e15), body.es_historico ? 1 : 0,
+          uid
         ).run();
+
+        if (!res.meta || res.meta.changes === 0) {
+          return json({
+            error: 'conflicto_folio', folio_id: body.folio_id,
+            max_num: await maxFolioAnio(env, body.folio_anio)
+          }, 409, origin);
+        }
 
         return json({ ok: true, folio_id: body.folio_id }, 200, origin);
       }
@@ -197,7 +230,16 @@ export default {
         let folioId = '';
         try { folioId = decodeURIComponent(path.slice('/solicitudes/'.length)); } catch (_) {}
         if (!/^[A-Za-z0-9\-_/ ]{1,40}$/.test(folioId)) return json({ error: 'folio_id inválido' }, 400, origin);
-        await env.DB.prepare(`DELETE FROM solicitudes WHERE folio_id = ?`).bind(folioId).run();
+        const uidDel = url.searchParams.get('uid') || '';
+        if (uidDel && !RE_UID.test(uidDel)) return json({ error: 'uid inválido' }, 400, origin);
+        // Solo borra si el registro de la nube es el mismo (mismo uid)
+        const del = await env.DB.prepare(
+          `DELETE FROM solicitudes WHERE folio_id = ? AND COALESCE(uid, '') = ?`
+        ).bind(folioId, uidDel).run();
+        if (del.meta && del.meta.changes === 0) {
+          const existe = await env.DB.prepare(`SELECT 1 FROM solicitudes WHERE folio_id = ?`).bind(folioId).first();
+          if (existe) return json({ error: 'conflicto_folio', folio_id: folioId }, 409, origin);
+        }
         return json({ ok: true }, 200, origin);
       }
 

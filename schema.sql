@@ -22,9 +22,14 @@ CREATE TABLE IF NOT EXISTS solicitudes (
   items_json       TEXT NOT NULL DEFAULT '[]',
   total             REAL DEFAULT 0,
   es_historico      INTEGER DEFAULT 0,
+  uid               TEXT,
   creado_en         TEXT DEFAULT (datetime('now')),
   actualizado_en    TEXT DEFAULT (datetime('now'))
 );
+
+-- MIGRACIÓN v1.4 (29-oct-2026) — solo en una base creada antes de esa fecha.
+-- Ejecutar sola, una vez, en D1 Console. No modifica los datos existentes:
+-- ALTER TABLE solicitudes ADD COLUMN uid TEXT;
 
 -- Configuración del sistema (contador de folio centralizado, opcional)
 CREATE TABLE IF NOT EXISTS configuracion (
