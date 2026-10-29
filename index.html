@@ -923,7 +923,7 @@ function irPaso(n) {
     for (var p = pasoActual; p < n; p++) { if (!validarPaso(p)) { if (p !== pasoActual) irPaso(p); return; } }
   }
   if (n === 3) { actualizarResumen(); setTimeout(function(){ initCanvas(); if(sigDataURL) restaurarFirma(); }, 150); }
-  if (pasoActual === 3 && n !== 3) { sigDataURL = capturarFirma(); }
+  if (pasoActual === 3 && n !== 3) { sigDataURL = capturarFirma(); firmaModificada = false; }
   document.querySelectorAll('.step-panel').forEach(function(p){ p.classList.remove('activo'); });
   document.querySelectorAll('.step-item').forEach(function(s,i){
     s.classList.remove('activo','completo');
@@ -948,18 +948,35 @@ function irPaso(n) {
 
 function irPasoSinValidar(n) {
   var previo = pasoActual;
-  if (previo === 3 && n !== 3) sigDataURL = capturarFirma();   // no perder la firma
+  if (previo === 3 && n !== 3) { sigDataURL = capturarFirma(); firmaModificada = false; }   // no perder la firma
   pasoActual = 99;                            // trata el salto como retroceso
   irPaso(n);
   if (pasoActual === 99) pasoActual = previo;
 }
 
+// FIX-006: la firma guardada se dibuja con dimensiones explícitas que
+// conservan la proporción. Se achica para caber completa (firma del Mac
+// abierta en el S26, o al girar el teléfono) y nunca se agranda ni se deforma.
+function dibujarFirmaAjustada(sc, src) {
+  if (!sc || !src || src === 'data:,') return;
+  var img = new Image();
+  img.onload = function(){
+    if (!img.width || !img.height || !sc.width || !sc.height) return;
+    var escala = Math.min(sc.width / img.width, sc.height / img.height, 1);
+    var w = Math.round(img.width * escala), h = Math.round(img.height * escala);
+    var y = Math.round((sc.height - h) / 2);
+    var ctx = sc.getContext('2d');
+    ctx.clearRect(0, 0, sc.width, sc.height);
+    ctx.drawImage(img, 0, y, w, h);
+    estiloFirma(ctx);
+  };
+  img.src = src;
+}
+
 function restaurarFirma() {
   var sc = document.getElementById('sig-canvas');
   if (!sc || !sigDataURL) return;
-  var img = new Image();
-  img.onload = function(){ sc.getContext('2d').drawImage(img, 0, 0); };
-  img.src = sigDataURL;
+  dibujarFirmaAjustada(sc, sigDataURL);
 }
 
 function verHistorial() {
@@ -1104,7 +1121,8 @@ function guardarHistorial() {
     }
     editIndex = solicitudes.indexOf(rec);
   }
-  sigDataURL = capturarFirma();
+  sigDataURL = sigSnap;
+  firmaModificada = false;
   actualizarDisplayFolio();
   renderHistorial();
   mostrarModalGuardado(folioGuardado);
@@ -1147,6 +1165,7 @@ function cargarHistorial(i) {
   renderItems();
   // Firma guardada: se restaura en el canvas al entrar al Paso 3
   sigDataURL = (h.firmaImg && h.firmaImg !== 'data:,') ? h.firmaImg : '';
+  firmaModificada = false;
   var scl = document.getElementById('sig-canvas');
   if (scl) { scl.getContext('2d').clearRect(0, 0, scl.width, scl.height); scl.classList.remove('sig-error'); }
   document.querySelectorAll('.campo-error').forEach(function(el){ el.classList.remove('campo-error'); });
@@ -1172,6 +1191,7 @@ function eliminarHistorial(i) {
 
 function nuevoFormulario() {
   editIndex = -1;
+  firmaModificada = false;
   document.querySelectorAll('.campo-error').forEach(function(el){ el.classList.remove('campo-error'); });
   var scn = document.getElementById('sig-canvas'); if (scn) scn.classList.remove('sig-error');
   sigDataURL = '';
@@ -1249,31 +1269,38 @@ function mostrarToast(msg) {
 }
 
 // ── CANVAS FIRMA ──
+// Firma: mientras no se dibuje encima, se conserva la imagen original
+// (sigDataURL). Así no se degrada al abrirla en pantallas de otro tamaño.
+var firmaModificada = false;
+function estiloFirma(ctx) {
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 2;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+}
+
 function initCanvas() {
   var sc = document.getElementById('sig-canvas');
   if (!sc) return;
   // Redimensionar (borra el contenido del canvas, restaurarFirma lo recupera)
   sc.width = sc.offsetWidth;
   sc.height = 200;
+  var ctx = sc.getContext('2d');
+  estiloFirma(ctx);                 // cambiar el tamaño reinicia el estilo del trazo
   // Evitar añadir listeners duplicados en cada visita al paso 3
   if (sc._siginit) return;
   sc._siginit = true;
-  var ctx = sc.getContext('2d');
-  ctx.strokeStyle = '#000';
-  ctx.lineWidth = 2;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
   var drawing = false;
   function getPos(e) {
     var r = sc.getBoundingClientRect();
     var t = e.touches ? e.touches[0] : e;
     return { x: (t.clientX - r.left) * (sc.width / r.width), y: (t.clientY - r.top) * (sc.height / r.height) };
   }
-  sc.addEventListener('mousedown', function(e){ drawing=true; ctx.beginPath(); var p=getPos(e); ctx.moveTo(p.x,p.y); });
+  sc.addEventListener('mousedown', function(e){ drawing=true; firmaModificada=true; ctx.beginPath(); var p=getPos(e); ctx.moveTo(p.x,p.y); });
   sc.addEventListener('mousemove', function(e){ if(!drawing) return; var p=getPos(e); ctx.lineTo(p.x,p.y); ctx.stroke(); });
   sc.addEventListener('mouseup', function(){ drawing=false; });
   sc.addEventListener('mouseleave', function(){ drawing=false; });
-  sc.addEventListener('touchstart', function(e){ e.preventDefault(); drawing=true; ctx.beginPath(); var p=getPos(e); ctx.moveTo(p.x,p.y); }, {passive:false});
+  sc.addEventListener('touchstart', function(e){ e.preventDefault(); drawing=true; firmaModificada=true; ctx.beginPath(); var p=getPos(e); ctx.moveTo(p.x,p.y); }, {passive:false});
   sc.addEventListener('touchmove', function(e){ e.preventDefault(); if(!drawing) return; var p=getPos(e); ctx.lineTo(p.x,p.y); ctx.stroke(); }, {passive:false});
   sc.addEventListener('touchend', function(){ drawing=false; });
 }
@@ -1283,9 +1310,11 @@ function limpiarFirma() {
   if (sc) sc.classList.remove('sig-error');
   if (sc) sc.getContext('2d').clearRect(0, 0, sc.width, sc.height);
   sigDataURL = '';
+  firmaModificada = true;
 }
 
 function capturarFirma() {
+  if (!firmaModificada && sigDataURL) return sigDataURL;   // firma original intacta
   var sc = document.getElementById('sig-canvas');
   if (!sc) return '';
   var temp = document.createElement('canvas');
@@ -1293,7 +1322,7 @@ function capturarFirma() {
   var ctx = temp.getContext('2d');
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, temp.width, temp.height);
-  ctx.drawImage(sc, 0, 0);
+  ctx.drawImage(sc, 0, 0, temp.width, temp.height);   // FIX-006
   return temp.toDataURL('image/jpeg', 0.7);
 }
 
@@ -1432,13 +1461,14 @@ function guardarHistorico() {
 window.addEventListener('resize', function() {
   var sc = document.getElementById('sig-canvas');
   if (!sc || !sc.offsetParent) return; // solo si está visible
-  var prev = capturarFirma();
+  if (sc.width === sc.offsetWidth) return;              // el ancho no cambió (p. ej. barra del navegador)
+  var prev = capturarFirma();                          // original si no se dibujó encima
   sc.width = sc.offsetWidth;
   sc.height = 200;
+  estiloFirma(sc.getContext('2d'));
   if (prev) {
-    var img = new Image();
-    img.onload = function() { sc.getContext('2d').drawImage(img, 0, 0, sc.width, sc.height); };
-    img.src = prev;
+    sigDataURL = prev; firmaModificada = false;        // las siguientes rotaciones parten de esta imagen
+    dibujarFirmaAjustada(sc, prev);
   }
 });
 // Cerrar modal al tocar el overlay fuera del sheet

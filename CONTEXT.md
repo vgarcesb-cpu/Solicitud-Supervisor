@@ -45,6 +45,8 @@ Campos de cada solicitud que no son del formulario: `id` (folio), `uid` (huella 
 
 Campos obligatorios: "Siguiente" no avanza sin fecha y comandante (Paso 1) ni con ítems incompletos (Paso 2: descripción, cantidad > 0 y precio > 0). Guardar exige los pasos 1 y 2. Imprimir exige además nombre, grado, cargo y firma a mano. El trazo se detecta buscando píxeles oscuros en el canvas, así que también cuenta una firma restaurada del historial.
 
+Firma: el canvas mide el ancho de la pantalla por 200 px de alto. Una firma guardada se dibuja ajustada a ese tamaño sin deformarla (FIX-006). La imagen original queda en `sigDataURL` y es la que se guarda y se imprime mientras no se dibuje encima (`firmaModificada`). Girar la pantalla vuelve a ajustarla desde esa imagen (FIX-010).
+
 Al guardar, la pantalla no se limpia. La solicitud queda abierta en modo edición y aparece un modal con el folio, el estado del respaldo y tres botones: "Imprimir PDF", "+ Nueva solicitud" y "Seguir viendo esta solicitud". Guardar otra vez actualiza la misma solicitud. El formulario se limpia solo con "+ Nuevo" (barra inferior del Paso 3) o "+ Nueva solicitud" (modal). La impresión espera 700 ms antes de abrir el diálogo.
 
 El encabezado, el resumen y el PDF muestran el folio del registro abierto, incluido el folio de papel de un histórico. "Traer respaldo" y "Sincronizar próximo folio" no cambian ese folio; solo ajustan el contador para la próxima solicitud.
@@ -136,6 +138,7 @@ Todo cambio pasa por tres etapas: Mac, después GitHub y Cloudflare, y al final 
 12. D1: `configuracion.api_worker_url` actualizada a `https://supervisor-api.totis.cl` (antes la URL `workers.dev`).
 13. Validación por paso (FIX-009). Paso 1: fecha y comandante. Paso 2: al menos un ítem; cada ítem usado con descripción, cantidad > 0 y precio > 0. Imprimir exige además nombre, grado, cargo y trazo de firma; guardar sin firma se permite como borrador. Los campos que faltan quedan en rojo y un aviso los nombra. "Atrás" no valida. Un registro antiguo sin comandante o sin ítems hay que completarlo antes de volver a guardarlo.
 14. Editar una solicitud firmada ya no borra la firma: al abrir un registro se carga su firma guardada en el canvas. Antes, editar y guardar la reemplazaba por una firma en blanco.
+15. FIX-006: la firma guardada se dibuja con dimensiones explícitas que conservan la proporción. Una firma hecha en el Mac se ve completa en el S26, y al girar el teléfono ya no se estira. Mientras no se dibuje encima, guardar e imprimir usan la imagen original, así que la firma no se achica al pasar entre dispositivos. El grosor del trazo se mantiene en 2 px al volver al Paso 3 o al girar.
 
 23 y 24-jun-2026: `id` asignado al guardar, reintento ante error de servidor, históricos en el flujo completo, tarjeta de respaldo movida al Paso 1 e indicador de sincronización.
 
