@@ -66,6 +66,10 @@ Folios entre dispositivos:
 - Si dos dispositivos crean el mismo folio sin señal, conserva el número el que sincroniza primero. El otro recibe 409 del Worker, pasa al siguiente folio libre y queda con la marca "REASIGNADO · antes ADQ-…-… · reimprimir". La marca se quita al imprimir de nuevo esa solicitud.
 - Los históricos de papel y los registros sin `uid` nunca se renumeran. Si chocan, quedan con la marca "CONFLICTO EN LA NUBE" para revisión manual.
 
+## Worker v1.5 (31-oct-2026)
+
+- El tope de 1,5 MB del `POST /solicitudes` se mide sobre los bytes que llegan, no solo sobre el `Content-Length` que declara el cliente. Sin otros cambios de contrato.
+
 ## Worker v1.4 (activo desde el 29-oct-2026, versión `82e27533`)
 
 | Endpoint | Método | Clave | Función |
@@ -85,7 +89,7 @@ Folios entre dispositivos:
 Comprobación rápida desde la Terminal:
 
 ```bash
-curl -s https://supervisor-api.totis.cl/health; echo        # version 1.4, auth false
+curl -s https://supervisor-api.totis.cl/health; echo        # version 1.5, auth false
 curl -s https://supervisor-api.totis.cl/solicitudes; echo   # "Clave de sincronización inválida"
 ```
 

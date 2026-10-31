@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════
-// worker.js — Solicitud Adquisición Supervisor (AGA FACH) v1.4
+// worker.js — Solicitud Adquisición Supervisor (AGA FACH) v1.5
 // Modelo HÍBRIDO offline-first: este Worker es respaldo/sync,
 // nunca fuente de verdad. El frontend sigue funcionando 100%
 // offline con localStorage; esto solo sincroniza cuando hay señal.
@@ -26,6 +26,8 @@
 //       - DELETE /solicitudes/:id?uid=... solo borra si el uid coincide.
 //       - Registros sin uid (antiguos e históricos de papel) siguen como
 //         antes entre ellos: el último que escribe gana.
+// v1.5 (31-oct-2026): el tope de 1,5 MB del POST se aplica sobre los
+//       bytes recibidos, no solo sobre el Content-Length declarado.
 // ═══════════════════════════════════════════════════════
 
 const ORIGENES_PERMITIDOS = [
@@ -137,7 +139,7 @@ export default {
       // Health check — público, informa si la clave enviada es válida
       if (path === '/health')
         return json({
-          ok: true, app: 'SOLICITUD-SUPERVISOR', version: '1.4',
+          ok: true, app: 'SOLICITUD-SUPERVISOR', version: '1.5',
           auth: claveValida(request, env), ts: new Date().toISOString()
         }, 200, origin);
 
@@ -150,8 +152,12 @@ export default {
         const largo = Number(request.headers.get('Content-Length') || 0);
         if (largo > MAX_BODY_BYTES) return json({ error: 'Solicitud demasiado grande' }, 413, origin);
 
+        // v1.5: se mide lo que realmente llega, no solo el Content-Length
+        // que declara el cliente (puede faltar o venir falso).
+        const buffer = await request.arrayBuffer();
+        if (buffer.byteLength > MAX_BODY_BYTES) return json({ error: 'Solicitud demasiado grande' }, 413, origin);
         let body;
-        try { body = await request.json(); }
+        try { body = JSON.parse(new TextDecoder().decode(buffer)); }
         catch (_) { return json({ error: 'JSON inválido' }, 400, origin); }
 
         const err = validarSolicitud(body);
