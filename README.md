@@ -29,12 +29,12 @@ La app funciona sin internet. `localStorage` es la fuente de verdad. Cuando hay 
 | `sw.js` | Service Worker: red primero para la página, caché sin señal |
 | `icono.png`, `icono-maskable.png` | Iconos 512×512 |
 | `_headers` | CSP y headers de seguridad (Cloudflare Pages) |
-| `worker.js` | Worker de respaldo, v1.4 |
+| `worker.js` | Worker de respaldo, v1.5 |
 | `schema.sql` | Tablas de D1 y migración de la columna `uid` |
 | `wrangler.toml` | Nombre del Worker y enlace a D1 |
 | `CONTEXT.md` | Detalle técnico, procedimientos e historial de cambios |
 
-## API del Worker (v1.4)
+## API del Worker (v1.5)
 
 Todas las rutas, salvo `/health`, exigen `Authorization: Bearer <clave>`. La clave es el Secret `SYNC_KEY` del Worker.
 
@@ -67,7 +67,7 @@ Todo cambio pasa por tres etapas:
 
 ## Estado
 
-29-oct-2026: Worker v1.4 activo, Service Worker v3, app instalada en el S26. Validado en Mac y S26.
+31-oct-2026: Worker v1.5 (tope de 1,5 MB medido sobre lo recibido). 29-oct-2026: Worker v1.4 activo, Service Worker v3, app instalada en el S26. Validado en Mac y S26.
 
 ## Uso
 
